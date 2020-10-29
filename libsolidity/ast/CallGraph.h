@@ -62,7 +62,7 @@ struct CallGraph
 	std::map<Node, std::set<Node, CompareByID>, CompareByID> edges;
 
 	/// Contracts that may get created with `new` by functions present in the graph.
-	std::set<ContractDefinition const*, ASTNode::CompareByID> createdContracts;
+	std::map<ContractDefinition const*, ASTNode const*, ASTNode::CompareByID> createdContracts;
 
 	/// Events that may get emitted by functions present in the graph.
 	std::set<EventDefinition const*, ASTNode::CompareByID> emittedEvents;

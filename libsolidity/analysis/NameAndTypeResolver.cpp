@@ -379,17 +379,21 @@ void NameAndTypeResolver::linearizeBaseContracts(ContractDefinition& _contract)
 		// "push_front" has the effect that bases mentioned later can overwrite members of bases
 		// mentioned earlier
 		input.back().push_front(base);
+		_contract.annotation().contractDependencies.emplace(base, baseSpecifier.get());
+
 		vector<ContractDefinition const*> const& basesBases = base->annotation().linearizedBaseContracts;
 		if (basesBases.empty())
 			m_errorReporter.fatalTypeError(2449_error, baseName.location(), "Definition of base has to precede definition of derived contract");
 		input.push_front(list<ContractDefinition const*>(basesBases.begin(), basesBases.end()));
+
+		auto const& basesDependencies = base->annotation().contractDependencies;
+		_contract.annotation().contractDependencies.insert(basesDependencies.begin(), basesDependencies.end());
 	}
 	input.back().push_front(&_contract);
 	vector<ContractDefinition const*> result = cThreeMerge(input);
 	if (result.empty())
 		m_errorReporter.fatalTypeError(5005_error, _contract.location(), "Linearization of inheritance graph impossible");
 	_contract.annotation().linearizedBaseContracts = result;
-	_contract.annotation().contractDependencies.insert(result.begin() + 1, result.end());
 }
 
 template <class T>

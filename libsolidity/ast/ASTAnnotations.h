@@ -152,16 +152,21 @@ struct StructDeclarationAnnotation: TypeDeclarationAnnotation
 	std::optional<bool> containsNestedMapping;
 };
 
-struct ContractDefinitionAnnotation: TypeDeclarationAnnotation, StructurallyDocumentedAnnotation
+struct SharedContractDependenciesAnnotation
+{
+	/// List of contracts that this contract or function creates, i.e. contracts which need to be compiled first.
+	/// For ContractDefinitions: Also includes all contracts from linearizedBaseContracts.
+	/// Only relevant for contracts or free functions
+	std::map<ContractDefinition const*, ASTNode const*> contractDependencies;
+};
+
+struct ContractDefinitionAnnotation: TypeDeclarationAnnotation, StructurallyDocumentedAnnotation, SharedContractDependenciesAnnotation
 {
 	/// List of functions and modifiers without a body. Can also contain functions from base classes.
 	std::optional<std::vector<Declaration const*>> unimplementedDeclarations;
 	/// List of all (direct and indirect) base contracts in order from derived to
 	/// base, including the contract itself.
 	std::vector<ContractDefinition const*> linearizedBaseContracts;
-	/// List of contracts this contract creates, i.e. which need to be compiled first.
-	/// Also includes all contracts from @a linearizedBaseContracts.
-	std::set<ContractDefinition const*> contractDependencies;
 	/// Mapping containing the nodes that define the arguments for base constructors.
 	/// These can either be inheritance specifiers or modifier invocations.
 	std::map<FunctionDefinition const*, ASTNode const*> baseConstructorArguments;
@@ -177,7 +182,7 @@ struct CallableDeclarationAnnotation: DeclarationAnnotation
 	std::set<CallableDeclaration const*> baseFunctions;
 };
 
-struct FunctionDefinitionAnnotation: CallableDeclarationAnnotation, StructurallyDocumentedAnnotation
+struct FunctionDefinitionAnnotation: CallableDeclarationAnnotation, StructurallyDocumentedAnnotation, SharedContractDependenciesAnnotation
 {
 };
 

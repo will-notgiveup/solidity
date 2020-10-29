@@ -114,6 +114,7 @@ private:
 	void endVisit(InheritanceSpecifier const& _inheritance) override;
 	void endVisit(ModifierDefinition const& _modifier) override;
 	bool visit(FunctionDefinition const& _function) override;
+	void endVisit(FunctionDefinition const& _function) override;
 	bool visit(VariableDeclaration const& _variable) override;
 	/// We need to do this manually because we want to pass the bases of the current contract in
 	/// case this is a base constructor call.
@@ -147,11 +148,6 @@ private:
 	void endVisit(Literal const& _literal) override;
 	void endVisit(UsingForDirective const& _usingForDirective) override;
 
-	bool contractDependenciesAreCyclic(
-		ContractDefinition const& _contract,
-		std::set<ContractDefinition const*> const& _seenContracts = std::set<ContractDefinition const*>()
-	) const;
-
 	/// @returns the referenced declaration and throws on error.
 	Declaration const& dereference(Identifier const& _identifier) const;
 	/// @returns the referenced declaration and throws on error.
@@ -180,8 +176,21 @@ private:
 			return m_currentSourceUnit;
 	}
 
+	SharedContractDependenciesAnnotation* currentContractDependencies()
+	{
+		solAssert(!m_currentFreeFunction || !m_currentContract, "Both variables are set?!");
+
+		if (m_currentFreeFunction)
+			return &m_currentFreeFunction->annotation();
+		else if (m_currentContract)
+			return &m_currentContract->annotation();
+
+		return nullptr;
+	}
+
 	SourceUnit const* m_currentSourceUnit = nullptr;
 	ContractDefinition const* m_currentContract = nullptr;
+	FunctionDefinition const* m_currentFreeFunction = nullptr;
 
 	langutil::EVMVersion m_evmVersion;
 

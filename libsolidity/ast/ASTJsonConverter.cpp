@@ -35,6 +35,7 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/algorithm/sort.hpp>
+#include <boost/range/adaptors.hpp>
 
 #include <utility>
 #include <vector>
@@ -269,7 +270,10 @@ bool ASTJsonConverter::visit(ContractDefinition const& _node)
 		make_pair("contractKind", contractKind(_node.contractKind())),
 		make_pair("abstract", _node.abstract()),
 		make_pair("baseContracts", toJson(_node.baseContracts())),
-		make_pair("contractDependencies", getContainerIds(_node.annotation().contractDependencies, true)),
+		make_pair("contractDependencies", getContainerIds(
+			_node.annotation().contractDependencies | boost::adaptors::map_keys,
+			true
+		)),
 		make_pair("nodes", toJson(_node.subNodes())),
 		make_pair("scope", idOrNull(_node.scope()))
 	};

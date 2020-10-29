@@ -4,6 +4,7 @@ Language Features:
 
 
 Compiler Features:
+ * References Resolver: Detect circular references for libraries and free functions
 
 
 Bugfixes:

@@ -1200,7 +1200,7 @@ void CompilerStack::compileContract(
 	if (_otherCompilers.count(&_contract))
 		return;
 
-	for (auto const* dependency: _contract.annotation().contractDependencies)
+	for (auto const& [dependency, referencee]: _contract.annotation().contractDependencies)
 		compileContract(*dependency, _otherCompilers);
 
 	if (!_contract.canBeDeployed())
@@ -1286,7 +1286,7 @@ void CompilerStack::generateIR(ContractDefinition const& _contract)
 		);
 
 	string dependenciesSource;
-	for (auto const* dependency: _contract.annotation().contractDependencies)
+	for (auto const& [dependency, referencee]: _contract.annotation().contractDependencies)
 		generateIR(*dependency);
 
 	if (!_contract.canBeDeployed())

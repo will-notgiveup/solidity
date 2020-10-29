@@ -130,7 +130,7 @@ void checkCallGraphExpectations(
 	map<string, set<string>> const& _expectedEmittedEventSets = {}
 )
 {
-	auto getContractName = [](ContractDefinition const* _contract){ return _contract->name(); };
+	auto getContractName = [](pair<ContractDefinition const*, ASTNode const*> _contractPair){ return _contractPair.first->name(); };
 	auto eventToString = [](EventDefinition const* _event){ return toString(CallGraph::Node(_event)); };
 	auto notEmpty = [](set<string> const& _set){ return !_set.empty(); };
 
