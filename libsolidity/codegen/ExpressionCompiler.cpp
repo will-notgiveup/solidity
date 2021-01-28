@@ -29,6 +29,7 @@
 #include <libsolidity/codegen/LValue.h>
 
 #include <libsolidity/ast/AST.h>
+#include <libsolidity/ast/ASTUtils.h>
 #include <libsolidity/ast/TypeProvider.h>
 
 #include <libevmasm/GasMeter.h>
@@ -914,7 +915,22 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		}
 		case FunctionType::Kind::Error:
 		{
-			solAssert(false, "");
+			_functionCall.expression().accept(*this);
+			vector<Type const*> argumentTypes;
+			for (ASTPointer<Expression const> const& arg: _functionCall.sortedArguments())
+			{
+				arg->accept(*this);
+				argumentTypes.push_back(arg->annotation().type);
+			}
+			auto const& error = dynamic_cast<ErrorDefinition const&>(function.declaration());
+			FunctionType const* errorFunctionType = error.functionType(true);
+			solAssert(errorFunctionType, "");
+			utils().revertWithError(
+				errorFunctionType->externalSignature(),
+				errorFunctionType->parameterTypes(),
+				argumentTypes
+			);
+			break;
 		}
 		case FunctionType::Kind::BlockHash:
 		{

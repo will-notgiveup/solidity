@@ -3107,6 +3107,62 @@ void IRGeneratorForStatements::rethrow()
 		m_code << "revert(0, 0) // rethrow\n"s;
 }
 
+void IRGeneratorForStatements::revertWithError(ASTPointer<Expression const> const& _error)
+{
+	solAssert(_error, "");
+
+	bool usesString = _error->annotation().type->isImplicitlyConvertibleTo(*TypeProvider::stringMemory());
+	if (usesString && m_context.revertStrings() == RevertStrings::Strip)
+	{
+		m_code << "revert(0, 0)\n";
+		return;
+	}
+
+	string signature;
+	vector<ASTPointer<Expression const>> errorArguments;
+	vector<Type const*> parameterTypes;
+	if (usesString)
+	{
+		signature = "Error(string)";
+		errorArguments.push_back(_error);
+		parameterTypes.push_back(TypeProvider::stringMemory());
+	}
+	else
+	{
+		FunctionCall const* errorCall = dynamic_cast<FunctionCall const*>(_error.get());
+		solAssert(errorCall, "");
+		solAssert(*errorCall->annotation().kind == FunctionCallKind::FunctionCall, "");
+		ErrorDefinition const* error = dynamic_cast<ErrorDefinition const*>(referencedDeclaration(errorCall->expression()));
+		solAssert(error, "");
+		signature = error->functionType(true)->externalSignature();
+		parameterTypes = error->functionType(true)->parameterTypes();
+		errorArguments = errorCall->sortedArguments();
+	}
+
+	Whiskers templ(R"({
+		let <pos> := <allocateUnbounded>()
+		mstore(<pos>, <hash>)
+		let <end> := <encode>(add(<pos>, 4) <argumentVars>)
+		revert(<pos>, sub(<end>, <pos>))
+	})");
+	templ("pos", m_context.newYulVariable());
+	templ("end", m_context.newYulVariable());
+	templ("hash", util::selectorFromSignature(signature).str());
+	templ("allocateUnbounded", m_utils.allocateUnboundedFunction());
+
+	vector<string> errorArgumentVars;
+	vector<Type const*> errorArgumentTypes;
+	for (ASTPointer<Expression const> const& arg: errorArguments)
+	{
+		errorArgumentVars += IRVariable(*arg).stackSlots();
+		errorArgumentTypes.push_back(arg->annotation().type);
+	}
+	templ("argumentVars", joinHumanReadablePrefixed(errorArgumentVars));
+	templ("encode", m_context.abiFunctions().tupleEncoder(errorArgumentTypes, parameterTypes));
+
+	m_code << templ.render();
+}
+
 bool IRGeneratorForStatements::visit(TryCatchClause const& _clause)
 {
 	_clause.block().accept(*this);
