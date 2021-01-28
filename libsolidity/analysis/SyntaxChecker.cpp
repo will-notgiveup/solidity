@@ -29,6 +29,7 @@
 #include <liblangutil/SemVerHandler.h>
 
 #include <libsolutil/UTF8.h>
+#include <libsolutil/FunctionSelector.h>
 
 #include <boost/algorithm/string.hpp>
 
