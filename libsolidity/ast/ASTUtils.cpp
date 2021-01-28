@@ -24,24 +24,29 @@
 namespace solidity::frontend
 {
 
+Declaration const* referencedDeclaration(Expression const& _expression)
+{
+	if (auto const* memberAccess = dynamic_cast<MemberAccess const*>(&_expression))
+		return memberAccess->annotation().referencedDeclaration;
+	else if (auto const* identifier = dynamic_cast<Identifier const*>(&_expression))
+		return identifier->annotation().referencedDeclaration;
+	else
+		return nullptr;
+}
+
 bool isConstantVariableRecursive(VariableDeclaration const& _varDecl)
 {
 	solAssert(_varDecl.isConstant(), "Constant variable expected");
-
-	auto referencedDeclaration = [&](Expression const* _e) -> VariableDeclaration const*
-	{
-		if (auto identifier = dynamic_cast<Identifier const*>(_e))
-			return dynamic_cast<VariableDeclaration const*>(identifier->annotation().referencedDeclaration);
-		else if (auto memberAccess = dynamic_cast<MemberAccess const*>(_e))
-			return dynamic_cast<VariableDeclaration const*>(memberAccess->annotation().referencedDeclaration);
-		return nullptr;
-	};
 
 	auto visitor = [&](VariableDeclaration const& _variable, util::CycleDetector<VariableDeclaration>& _cycleDetector, size_t _depth)
 	{
 		solAssert(_depth < 256, "Recursion depth limit reached");
 
-		if (auto referencedVarDecl = referencedDeclaration(_variable.value().get()))
+		if (!_variable.value())
+			return;
+		if (auto referencedVarDecl = dynamic_cast<VariableDeclaration const*>(
+			referencedDeclaration(*_variable.value())
+		))
 			if (referencedVarDecl->isConstant())
 				if (_cycleDetector.run(*referencedVarDecl))
 					return;
