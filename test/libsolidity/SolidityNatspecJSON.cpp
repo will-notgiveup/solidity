@@ -2247,6 +2247,47 @@ BOOST_AUTO_TEST_CASE(dev_return_name_no_description)
 	checkNatspec(sourceCode, "B", natspec2, false);
 }
 
+BOOST_AUTO_TEST_CASE(error)
+{
+	char const* sourceCode = R"(
+		contract test {
+			/// Something failed.
+			/// @dev an error.
+			/// @param a first parameter
+			/// @param b second parameter
+			error E(uint a, uint b);
+		}
+	)";
+
+	char const* devdoc = R"X({
+		"errors":{
+			"E(uint256,uint256)":
+			{
+				"details" : "an error.",
+				"params" :
+				{
+					"a" : "first parameter",
+					"b" : "second parameter"
+				}
+			}
+		},
+		"methods": {}
+	})X";
+
+	checkNatspec(sourceCode, "test", devdoc, false);
+
+	char const* userdoc = R"X({
+		"errors":{
+			"E(uint256,uint256)":
+			{
+				"notice" : "Something failed."
+			}
+		},
+		"methods": {}
+	})X";
+	checkNatspec(sourceCode, "test", userdoc, true);
+}
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()

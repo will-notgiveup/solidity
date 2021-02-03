@@ -36,11 +36,10 @@ using namespace solidity::frontend;
 Json::Value Natspec::userDocumentation(ContractDefinition const& _contractDef)
 {
 	Json::Value doc;
-	Json::Value methods(Json::objectValue);
-	Json::Value events(Json::objectValue);
 
 	doc["version"] = Json::Value(c_natspecVersion);
 	doc["kind"]    = Json::Value("user");
+	doc["methods"] = Json::objectValue;
 
 	auto constructorDefinition(_contractDef.constructor());
 	if (constructorDefinition)
@@ -51,7 +50,7 @@ Json::Value Natspec::userDocumentation(ContractDefinition const& _contractDef)
 			// add the constructor, only if we have any documentation to add
 			Json::Value user;
 			user["notice"] = Json::Value(value);
-			methods["constructor"] = user;
+			doc["methods"]["constructor"] = user;
 		}
 	}
 
@@ -73,24 +72,23 @@ Json::Value Natspec::userDocumentation(ContractDefinition const& _contractDef)
 			}
 
 			if (!value.empty())
-			{
-				Json::Value user;
 				// since @notice is the only user tag if missing function should not appear
-				user["notice"] = Json::Value(value);
-				methods[it.second->externalSignature()] = user;
-			}
+				doc["methods"][it.second->externalSignature()]["notice"] = value;
 		}
 
 	for (auto const& event: _contractDef.interfaceEvents())
 	{
 		string value = extractDoc(event->annotation().docTags, "notice");
 		if (!value.empty())
-			events[event->functionType(true)->externalSignature()]["notice"] = value;
+			doc["events"][event->functionType(true)->externalSignature()]["notice"] = value;
 	}
 
-	doc["methods"] = methods;
-	if (!events.empty())
-		doc["events"] = events;
+	for (auto const& error: _contractDef.interfaceErrors())
+	{
+		string value = extractDoc(error->annotation().docTags, "notice");
+		if (!value.empty())
+			doc["errors"][error->functionType(true)->externalSignature()]["notice"] = value;
+	}
 
 	return doc;
 }
@@ -98,7 +96,6 @@ Json::Value Natspec::userDocumentation(ContractDefinition const& _contractDef)
 Json::Value Natspec::devDocumentation(ContractDefinition const& _contractDef)
 {
 	Json::Value doc;
-	Json::Value methods(Json::objectValue);
 
 	doc["version"] = Json::Value(c_natspecVersion);
 	doc["kind"] = Json::Value("dev");
@@ -113,13 +110,14 @@ Json::Value Natspec::devDocumentation(ContractDefinition const& _contractDef)
 	if (!dev.empty())
 		doc["details"] = Json::Value(dev);
 
+	doc["methods"] = Json::objectValue;
 	auto constructorDefinition(_contractDef.constructor());
 	if (constructorDefinition)
 	{
 		Json::Value constructor(devDocumentation(constructorDefinition->annotation().docTags));
 		if (!constructor.empty())
 			// add the constructor, only if we have any documentation to add
-			methods["constructor"] = constructor;
+			doc["methods"]["constructor"] = constructor;
 	}
 
 	for (auto const& it: _contractDef.interfaceFunctions())
@@ -133,34 +131,30 @@ Json::Value Natspec::devDocumentation(ContractDefinition const& _contractDef)
 			Json::Value jsonReturn = extractReturnParameterDocs(fun->annotation().docTags, *fun);
 
 			if (!jsonReturn.empty())
-				method["returns"] = jsonReturn;
+				method["returns"] = move(jsonReturn);
 
 			if (!method.empty())
-				methods[it.second->externalSignature()] = method;
+				doc["methods"][it.second->externalSignature()] = move(method);
 		}
 	}
 
-	Json::Value stateVariables(Json::objectValue);
 	for (VariableDeclaration const* varDecl: _contractDef.stateVariables())
 	{
 		if (auto devDoc = devDocumentation(varDecl->annotation().docTags); !devDoc.empty())
-			stateVariables[varDecl->name()] = devDoc;
+			doc["stateVariables"][varDecl->name()] = devDoc;
 
 		solAssert(varDecl->annotation().docTags.count("return") <= 1, "");
 		if (varDecl->annotation().docTags.count("return") == 1)
-			stateVariables[varDecl->name()]["return"] = extractDoc(varDecl->annotation().docTags, "return");
+			doc["stateVariables"][varDecl->name()]["return"] = extractDoc(varDecl->annotation().docTags, "return");
 	}
 
-	Json::Value events(Json::objectValue);
 	for (auto const& event: _contractDef.events())
 		if (auto devDoc = devDocumentation(event->annotation().docTags); !devDoc.empty())
-			events[event->functionType(true)->externalSignature()] = devDoc;
-
-	doc["methods"] = methods;
-	if (!stateVariables.empty())
-		doc["stateVariables"] = stateVariables;
-	if (!events.empty())
-		doc["events"] = events;
+			doc["events"][event->functionType(true)->externalSignature()] = devDoc;
+	// TODO all errors
+	for (auto const& error: _contractDef.errors())
+		if (auto devDoc = devDocumentation(error->annotation().docTags); !devDoc.empty())
+			doc["errors"][error->functionType(true)->externalSignature()] = devDoc;
 
 	return doc;
 }
