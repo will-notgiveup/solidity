@@ -6,6 +6,7 @@ Language Features:
 Compiler Features:
  * Command Line Interface: Drop experimental support for ``--machine evm15``.
  * Optimizer: Try to move ``and`` with constant inside ``or`` to improve storage writes of small types.
+ * Yul EVM Code Transform: Stack Optimization: Reuse slots of unused function arguments and defer allocating stack slots for return variables until after expression statements and assignments that do not reference them.
 
 
 Bugfixes:
