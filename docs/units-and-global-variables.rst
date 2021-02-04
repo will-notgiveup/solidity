@@ -150,11 +150,17 @@ more details on error handling and when to use which function.
 ``require(bool condition)``
     reverts if the condition is not met - to be used for errors in inputs or external components.
 
+``require(bool condition, <errorName>(<arguments>))``
+    reverts if the condition is not met - to be used for errors in inputs or external components. Also provides a user-defined error instance.
+
 ``require(bool condition, string memory message)``
     reverts if the condition is not met - to be used for errors in inputs or external components. Also provides an error message.
 
 ``revert()``
     abort execution and revert state changes
+
+``revert(<errorName>(<arguments>))``
+    abort execution and revert state changes, providing a user-defined error instance as explanation.
 
 ``revert(string memory reason)``
     abort execution and revert state changes, providing an explanatory string

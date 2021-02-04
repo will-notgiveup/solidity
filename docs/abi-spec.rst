@@ -493,12 +493,40 @@ the arguments not be indexed). Developers may overcome this tradeoff and achieve
 efficient search and arbitrary legibility by defining events with two arguments — one
 indexed, one not — intended to hold the same value.
 
+.. _abi_errors:
+
+Errors
+======
+
+In case of a failure inside a contract, the contract can use a special opcode to abort execution and revert
+all state changes. In addition to these effects, descriptive data can be returned to the caller.
+This descriptive data is the encoding of an error plus arguments in the same way as data for a function
+call would be encoded.
+
+As an example, let us consider the following contract whose ``transfer`` function always
+reverts with a custom error of "insufficient balance":
+
+::
+
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity ^0.8.1;
+
+    contract TestToken {
+        error InsufficientBalance(uint256 available, uint256 required);
+        function transfer(address to, uint amount) {
+          revert(InsufficientBalance(0, amount));
+        }
+    }
+
+The return data would be encoded in the same way as a call to a function
+``InsufficientBalance(0, amount)``, i.e. ``0xcf479181``, ``u256(0)``, ``amount``.
+
 .. _abi_json:
 
 JSON
 ====
 
-The JSON format for a contract's interface is given by an array of function and/or event descriptions.
+The JSON format for a contract's interface is given by an array of function, event and error descriptions.
 A function description is a JSON object with the fields:
 
 - ``type``: ``"function"``, ``"constructor"``, ``"receive"`` (the :ref:`"receive Ether" function <receive-ether-function>`) or ``"fallback"`` (the :ref:`"default" function <fallback-function>`);
@@ -536,6 +564,17 @@ An event description is a JSON object with fairly similar fields:
 
 - ``anonymous``: ``true`` if the event was declared as ``anonymous``.
 
+Errors look as follows:
+
+- ``type``: always ``"error"``
+- ``name``: the name of the error.
+- ``inputs``: an array of objects, each of which contains:
+
+  * ``name``: the name of the parameter.
+  * ``type``: the canonical type of the parameter (more below).
+  * ``components``: used for tuple types (more below).
+
+
 For example,
 
 ::
@@ -548,6 +587,7 @@ For example,
         constructor() { b = hex"12345678901234567890123456789012"; }
         event Event(uint indexed a, bytes32 b);
         event Event2(uint indexed a, bytes32 b);
+        error InsufficientBalance(uint256 available, uint256 required);
         function foo(uint a) public { emit Event(a, b); }
         bytes32 b;
     }
@@ -557,6 +597,10 @@ would result in the JSON:
 .. code-block:: json
 
   [{
+  "type":"error",
+  "inputs": [{"name":"available","type":"uint256"},{"name":"required","type":"uint256"}],
+  "name":"InsufficientBalance"
+  }, {
   "type":"event",
   "inputs": [{"name":"a","type":"uint256","indexed":true},{"name":"b","type":"bytes32","indexed":false}],
   "name":"Event"

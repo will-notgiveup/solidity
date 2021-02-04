@@ -99,8 +99,11 @@ Global Variables
   for malformed input or error in external component)
 - ``require(bool condition, string memory message)``: abort execution and revert state changes if
   condition is ``false`` (use for malformed input or error in external component). Also provide error message.
+- ``require(bool condition, <errorName>(<arguments>))``: abort execution and revert state changes if
+  condition is ``false`` (use for malformed input or error in external component). Also provide error instance.
 - ``revert()``: abort execution and revert state changes
 - ``revert(string memory message)``: abort execution and revert state changes providing an explanatory string
+- ``revert(<errorName>(<arguments>))``: abort execution and revert state changes providing an error instance.
 - ``blockhash(uint blockNumber) returns (bytes32)``: hash of the given block - only works for 256 most recent blocks
 - ``keccak256(bytes memory) returns (bytes32)``: compute the Keccak-256 hash of the input
 - ``sha256(bytes memory) returns (bytes32)``: compute the SHA-256 hash of the input

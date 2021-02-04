@@ -551,7 +551,8 @@ state in the current call (and all its sub-calls) and
 flags an error to the caller.
 
 When exceptions happen in a sub-call, they "bubble up" (i.e.,
-exceptions are rethrown) automatically. Exceptions to this rule are ``send``
+exceptions are rethrown) automatically unless they are caught in
+a ``try/catch`` statement. Exceptions to this rule are ``send``
 and the low-level functions ``call``, ``delegatecall`` and
 ``staticcall``: they return ``false`` as their first return value in case
 of an exception instead of "bubbling up".
@@ -562,16 +563,10 @@ of an exception instead of "bubbling up".
     if the account called is non-existent, as part of the design
     of the EVM. Account existence must be checked prior to calling if needed.
 
-Exceptions in external calls can be caught with the ``try``/``catch`` statement.
-
-Exceptions can contain data that is passed back to the caller.
-This data consists of a 4-byte selector and subsequent :ref:`ABI-encoded<abi>` data.
-The selector is computed in the same way as a function selector, i.e.,
-the first four bytes of the keccak256-hash of a function
-signature - in this case an error signature.
-
-Currently, Solidity supports two error signatures: ``Error(string)``
-and ``Panic(uint256)``. The first ("error") is used for "regular" error conditions
+Exceptions can contain error data that is passed back to the caller
+in the form of :ref:`error instances <errors>`.
+The built-in errors ``Error(string)`` and ``Panic(uint256)`` are
+used by special functions, as explained below. The first ("error") is used for "regular" error conditions
 while the second ("panic") is used for errors that should not be present in bug-free code.
 
 Panic via ``assert`` and Error via ``require``
@@ -604,17 +599,19 @@ The error code supplied with the error data indicates the kind of panic.
 #. 0x41: If you allocate too much memory or create an array that is too large.
 #. 0x51: If you call a zero-initialized variable of internal function type.
 
-The ``require`` function either creates an error of type ``Error(string)``
-or an error without any error data and it
+The ``require`` function either creates an error without any data,
+an error of type ``Error(string)`` or a custom error type
+and it
 should be used to ensure valid conditions
 that cannot be detected until execution time.
 This includes conditions on inputs
 or return values from calls to external contracts.
 
 A ``Error(string)`` exception (or an exception without data) is generated
+by the compiler
 in the following situations:
 
-#. Calling ``require`` with an argument that evaluates to ``false``.
+#. Calling ``require(x)`` where ``x`` evaluates to ``false``.
 #. If you perform an external function call targeting a contract that contains no code.
 #. If your contract receives Ether via a public function without
    ``payable`` modifier (including the constructor and the fallback function).
@@ -634,10 +631,10 @@ an `Error` or a `Panic` (or whatever else was given):
 #. If you create a contract using the ``new`` keyword but the contract
    creation :ref:`does not finish properly<creating-contracts>`.
 
-You can optionally provide a message string for ``require``, but not for ``assert``.
+You can optionally provide a message string or a custom error for ``require``, but not for ``assert``.
 
 .. note::
-    If you do not provide a string argument to ``require``, it will revert
+    If you do not provide a string argument or custom error to ``require``, it will revert
     with empty error data, not even including the error selector.
 
 
@@ -685,9 +682,12 @@ the changes in the caller will always be reverted.
 The ``revert`` function is another way to trigger exceptions from within other code blocks to flag an error and
 revert the current call. The function takes an optional string
 message containing details about the error that is passed back to the caller
-and it will create an ``Error(string)`` exception.
+and it will create an ``Error(string)`` exception, or you provide a custom error instance.
 
-The following example shows how to use an error string together with ``revert`` and the equivalent ``require``:
+Using a custom error instance will usually be much cheaper than a string description.
+
+The following example shows how to use an error string and a custom error instance
+together with ``revert`` and the equivalent ``require``:
 
 ::
 
@@ -695,6 +695,8 @@ The following example shows how to use an error string together with ``revert`` 
     pragma solidity >=0.5.0 <0.9.0;
 
     contract VendingMachine {
+        address owner;
+        error Unauthorized();
         function buy(uint amount) public payable {
             if (amount > msg.value / 2 ether)
                 revert("Not enough Ether provided.");
@@ -705,9 +707,18 @@ The following example shows how to use an error string together with ``revert`` 
             );
             // Perform the purchase.
         }
+        function withdraw() public {
+            if (msg.sender != owner) revert(Unauthorized());
+            // Alternative way to do it:
+            require(msg.sender == owner, Unauthorized());
+
+            msg.sender.send(address(this).balance);
+        }
     }
 
-If you provide the reason string directly, then the two syntax options are equivalent, it is the developer's preference which one to use.
+The two ways ``if (!condition) revert(...);`` and ``require(condition, ...);`` are
+equivalent as long as the argumenst to ``revert`` and ``require`` do not have side-effects,
+for example if they are just strings or simple error instances.
 
 .. note::
     The ``require`` function is evaluated just as any other function.
