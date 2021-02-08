@@ -41,10 +41,19 @@ you can use state machine-like constructs inside a contract.
             _;
         }
 
+        /// Only the buyer can call this function.
+        error OnylBuyer();
+        /// Only the seller can call this function.
+        error OnylBuyer();
+        /// The function cannot be called at the current state.
+        error InvalidState();
+        /// The provided value has to be even.
+        error ValueNotEven();
+
         modifier onlyBuyer() {
             require(
                 msg.sender == buyer,
-                "Only buyer can call this."
+                OnlyBuyer()
             );
             _;
         }
@@ -52,7 +61,7 @@ you can use state machine-like constructs inside a contract.
         modifier onlySeller() {
             require(
                 msg.sender == seller,
-                "Only seller can call this."
+                OnlySeller()
             );
             _;
         }
@@ -60,7 +69,7 @@ you can use state machine-like constructs inside a contract.
         modifier inState(State _state) {
             require(
                 state == _state,
-                "Invalid state."
+                InvalidState()
             );
             _;
         }
@@ -76,7 +85,7 @@ you can use state machine-like constructs inside a contract.
         constructor() payable {
             seller = payable(msg.sender);
             value = msg.value / 2;
-            require((2 * value) == msg.value, "Value has to be even.");
+            require((2 * value) == msg.value, ValueNotEven());
         }
 
         /// Abort the purchase and reclaim the ether.

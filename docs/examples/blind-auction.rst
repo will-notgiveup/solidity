@@ -48,10 +48,21 @@ to receive their money - contracts cannot activate themselves.
         event HighestBidIncreased(address bidder, uint amount);
         event AuctionEnded(address winner, uint amount);
 
-        // The following is a so-called natspec comment,
-        // recognizable by the three slashes.
-        // It will be shown when the user is asked to
-        // confirm a transaction.
+        // Errors that describe failures.
+
+        // The triple-slash comments are so-called natspec
+        // comments. They will be shown when the user
+        // is asked to confirm a transaction or
+        // when an error is displayed.
+
+        /// The action has already ended.
+        error AuctionAlreadyEnded();
+        /// There is already a higher bid.
+        error BidNotHighEnough(uint highestBid);
+        /// The action has not ended yet.
+        error AuctionNotYetEnded();
+        /// The function actionEnd has already been called.
+        error AuctionEndAlreadyCalled();
 
         /// Create a simple auction with `_biddingTime`
         /// seconds bidding time on behalf of the
@@ -79,7 +90,7 @@ to receive their money - contracts cannot activate themselves.
             // period is over.
             require(
                 block.timestamp <= auctionEndTime,
-                "Auction already ended."
+                AuctionAlreadyEnded()
             );
 
             // If the bid is not higher, send the
@@ -89,7 +100,7 @@ to receive their money - contracts cannot activate themselves.
             // it having received the money).
             require(
                 msg.value > highestBid,
-                "There already is a higher bid."
+                BidNotHighEnough(highestBid)
             );
 
             if (highestBid != 0) {
@@ -140,8 +151,8 @@ to receive their money - contracts cannot activate themselves.
             // external contracts.
 
             // 1. Conditions
-            require(block.timestamp >= auctionEndTime, "Auction not yet ended.");
-            require(!ended, "auctionEnd has already been called.");
+            require(block.timestamp >= auctionEndTime, AuctionNotYetEnded());
+            require(!ended, AuctionEndAlreadyCalled());
 
             // 2. Effects
             ended = true;
@@ -207,12 +218,27 @@ invalid bids.
 
         event AuctionEnded(address winner, uint highestBid);
 
-        /// Modifiers are a convenient way to validate inputs to
-        /// functions. `onlyBefore` is applied to `bid` below:
-        /// The new function body is the modifier's body where
-        /// `_` is replaced by the old function body.
-        modifier onlyBefore(uint _time) { require(block.timestamp < _time); _; }
-        modifier onlyAfter(uint _time) { require(block.timestamp > _time); _; }
+        // Errors that describe failures.
+
+        /// The function has been called too early.
+        /// Try again at `_time`.
+        error TooEarly(uint _time);
+        /// The function has been called too late.
+        /// It cannot be called after `_time`.
+        error TooLate(uint _time);
+
+        // Modifiers are a convenient way to validate inputs to
+        // functions. `onlyBefore` is applied to `bid` below:
+        // The new function body is the modifier's body where
+        // `_` is replaced by the old function body.
+        modifier onlyBefore(uint _time) {
+            require(block.timestamp < _time, TooLate(_time));
+            _;
+        }
+        modifier onlyAfter(uint _time) {
+            require(block.timestamp > _time, TooEarly(_time));
+            _;
+        }
 
         constructor(
             uint _biddingTime,

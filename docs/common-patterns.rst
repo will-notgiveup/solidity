@@ -28,7 +28,7 @@ you receive the funds of the person who is now the richest.
 ::
 
     // SPDX-License-Identifier: GPL-3.0
-    pragma solidity >=0.7.0 <0.9.0;
+    pragma solidity ^0.8.1;
 
     contract WithdrawalContract {
         address public richest;
@@ -36,13 +36,17 @@ you receive the funds of the person who is now the richest.
 
         mapping (address => uint) pendingWithdrawals;
 
+        /// The amount of Ether sent was lower than
+        /// the currently highest amount.
+        error NotEnoughEther();
+
         constructor() payable {
             richest = msg.sender;
             mostSent = msg.value;
         }
 
         function becomeRichest() public payable {
-            require(msg.value > mostSent, "Not enough money sent.");
+            require(msg.value > mostSent, NotEnoughEther());
             pendingWithdrawals[richest] += msg.value;
             richest = msg.sender;
             mostSent = msg.value;
@@ -62,11 +66,15 @@ This is as opposed to the more intuitive sending pattern:
 ::
 
     // SPDX-License-Identifier: GPL-3.0
-    pragma solidity >=0.7.0 <0.9.0;
+    pragma solidity ^0.8.1;
 
     contract SendContract {
         address payable public richest;
         uint public mostSent;
+
+        /// The amount of Ether sent was lower than
+        /// the currently highest amount.
+        error NotEnoughEther();
 
         constructor() payable {
             richest = payable(msg.sender);
@@ -74,7 +82,7 @@ This is as opposed to the more intuitive sending pattern:
         }
 
         function becomeRichest() public payable {
-            require(msg.value > mostSent, "Not enough money sent.");
+            require(msg.value > mostSent, NotEnoughEther());
             // This line can cause problems (explained below).
             richest.transfer(msg.value);
             richest = payable(msg.sender);
@@ -133,6 +141,21 @@ restrictions highly readable.
         address public owner = msg.sender;
         uint public creationTime = block.timestamp;
 
+        // Now follows a list of errors that
+        // this contract can generate together
+        // with a textual explanation in special
+        // comments.
+
+        /// Sender not authorized for this
+        /// operation.
+        error Unauthorized();
+
+        /// Function called too early.
+        error TooEarly();
+
+        /// Not enough Ether sent with function call.
+        error NotEnoughEther();
+
         // Modifiers can be used to change
         // the body of a function.
         // If this modifier is used, it will
@@ -143,7 +166,7 @@ restrictions highly readable.
         {
             require(
                 msg.sender == _account,
-                "Sender not authorized."
+                Unauthorized()
             );
             // Do not forget the "_;"! It will
             // be replaced by the actual function
@@ -163,7 +186,7 @@ restrictions highly readable.
         modifier onlyAfter(uint _time) {
             require(
                 block.timestamp >= _time,
-                "Function called too early."
+                TooEarly()
             );
             _;
         }
@@ -188,7 +211,7 @@ restrictions highly readable.
         modifier costs(uint _amount) {
             require(
                 msg.value >= _amount,
-                "Not enough Ether provided."
+                NotEnoughEther()
             );
             _;
             if (msg.value > _amount)
