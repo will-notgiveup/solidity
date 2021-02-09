@@ -2247,6 +2247,58 @@ BOOST_AUTO_TEST_CASE(dev_return_name_no_description)
 	checkNatspec(sourceCode, "B", natspec2, false);
 }
 
+BOOST_AUTO_TEST_CASE(dev_different_amount_return_parameters)
+{
+	char const *sourceCode = R"(
+		interface IThing {
+			/// @return x a number
+			/// @return y another number
+			function value() external view returns (uint128 x, uint128 y);
+		}
+
+		contract Thing is IThing {
+			struct Value {
+				uint128 x;
+				uint128 y;
+			}
+
+			Value public override value;
+		}
+	)";
+
+	char const *natspec = R"ABCDEF({
+		"methods":
+		{
+			"value()":
+			{
+			  "returns":
+			  {
+				"x": "a number",
+				"y": "another number"
+			  }
+			}
+		}
+	})ABCDEF";
+
+	char const *natspec2 = R"ABCDEF({
+		"methods": {},
+		"stateVariables":
+		{
+			"value":
+			{
+				"return":
+				{
+					"x": "a number",
+					"y": "another number"
+				}
+			}
+		}
+	})ABCDEF";
+
+	checkNatspec(sourceCode, "IThing", natspec, false);
+	checkNatspec(sourceCode, "Thing", natspec2, false);
+}
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()

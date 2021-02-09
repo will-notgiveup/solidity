@@ -15,6 +15,7 @@ Bugfixes:
  * AST: Added ``referencedDeclaration`` for enum members.
  * Code Generator: Fix internal error when functions are passed as parameters of other callables, when the function types can be implicitly converted, but not identical.
  * Type Checker: Make function-hash collision errors into fatal type errors.
+ * Natspec: Fix internal error when base functions has more return parameters.
 
 
 AST Changes:
