@@ -2351,6 +2351,44 @@ string YulUtilFunctions::copyArrayFromStorageToMemoryFunction(ArrayType const& _
 	});
 }
 
+string YulUtilFunctions::bytesConcatFunction(vector<Type const*> const& _argumentTypes)
+{
+	string functionName = "bytes_concat";
+	size_t totalParams = 0;
+	for (Type const* argumentType: _argumentTypes)
+	{
+		solAssert(
+			argumentType->isImplicitlyConvertibleTo(*TypeProvider::bytesMemory()) ||
+			argumentType->isImplicitlyConvertibleTo(*TypeProvider::fixedBytes(32)),
+			""
+		);
+		totalParams += argumentType->sizeOnStack();
+		functionName += "_" + argumentType->identifier();
+	}
+
+	return m_functionCollector.createFunction(functionName, [&]() {
+		Whiskers templ(R"(
+			function <functionName>(<parameters>) -> outPtr {
+				outPtr := <allocateUnbounded>()
+				let dataStart := add(outPtr, 0x20)
+				let dataEnd := <encodePacked>(dataStart<?+parameters>, <parameters></+parameters>)
+				mstore(outPtr, sub(dataEnd, dataStart))
+				<finalizeAllocation>(outPtr, sub(dataEnd, outPtr))
+			}
+		)");
+		templ("functionName", functionName);
+		string paramPrefix = "param_";
+		templ("parameters", suffixedVariableNameList(paramPrefix, 0, totalParams));
+		templ("allocateUnbounded", allocateUnboundedFunction());
+		templ("finalizeAllocation", finalizeAllocationFunction());
+		templ(
+			"encodePacked",
+			ABIFunctions{m_evmVersion, m_revertStrings, m_functionCollector}.tupleEncoderPacked(_argumentTypes, _argumentTypes)
+		);
+		return templ.render();
+	});
+}
+
 string YulUtilFunctions::mappingIndexAccessFunction(MappingType const& _mappingType, Type const& _keyType)
 {
 	string functionName = "mapping_index_access_" + _mappingType.identifier() + "_of_" + _keyType.identifier();
