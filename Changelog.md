@@ -7,6 +7,7 @@ Compiler Features:
  * AST: Export NatSpec comments above each statement as their documentation.
  * Inline Assembly: Do not warn anymore about variables or functions being shadowed by EVM opcodes.
  * Optimizer: Simple inlining when jumping to small blocks that jump again after a few side-effect free opcodes.
+ * Yul Optimizer: Evaluate ``keccak256(a, c)``, when the value at memory location ``a`` is known at compile time and ``c`` is a constant ``<= 32``.
 
 
 Bugfixes:
