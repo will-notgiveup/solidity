@@ -32,6 +32,9 @@ namespace solidity::yul
  * Optimisation stage that replaces expressions of type ``sload(x)`` and ``mload(x)`` by the value
  * currently stored in storage resp. memory, if known.
  *
+ * Also evaluates simple ``keccak256(a, c)`` when the value at memory location `a` is known and `c`
+ * is a constant `<= 32`.
+ *
  * Works best if the code is in SSA form.
  *
  * Prerequisite: Disambiguator, ForLoopInitRewriter.
@@ -60,6 +63,13 @@ protected:
 	void tryResolve(
 		Expression& _e,
 		StoreLoadLocation _location,
+		std::vector<Expression> const& _arguments
+	);
+
+	/// Evaluates simple ``keccak256(a, c)`` when the value at memory location ``a`` is known and
+	/// `c` is a constant `<= 32`.
+	void tryEvaluateKeccak(
+		Expression& _e,
 		std::vector<Expression> const& _arguments
 	);
 
