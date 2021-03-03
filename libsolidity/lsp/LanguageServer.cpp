@@ -49,7 +49,6 @@ namespace // {{{ helpers
 		return "file://" + _path;
 	}
 
-	// TODO: maybe use SimpleASTVisitor here, if that would be a simple free-fuunction :)
 	class ASTNodeLocator : public ASTConstVisitor
 	{
 	public:
@@ -71,10 +70,10 @@ namespace // {{{ helpers
 		}
 
 	private:
-		explicit ASTNodeLocator(int _pos): m_pos{_pos} {}
+		explicit ASTNodeLocator(int _pos): m_pos{_pos}, m_closestMatch{nullptr} {}
 
-		int m_pos = -1;
-		ASTNode const* m_closestMatch = nullptr;
+		int m_pos;
+		ASTNode const* m_closestMatch;
 	};
 
 	optional<string> extractPathFromFileURI(std::string const& _uri)
@@ -88,16 +87,16 @@ namespace // {{{ helpers
 	void loadTextDocumentPosition(DocumentPosition& _params, Json::Value const& _json)
 	{
 		_params.path = extractPathFromFileURI(_json["textDocument"]["uri"].asString()).value();
-		_params.position.line = _json["position"]["line"].asInt() + 1;
-		_params.position.column = _json["position"]["character"].asInt() + 1;
+		_params.position.line = _json["position"]["line"].asInt();
+		_params.position.column = _json["position"]["character"].asInt();
 	}
 
 	DocumentPosition extractDocumentPosition(Json::Value const& _json)
 	{
 		DocumentPosition dpos{};
 		dpos.path = extractPathFromFileURI(_json["textDocument"]["uri"].asString()).value();
-		dpos.position.line = _json["position"]["line"].asInt() + 1;
-		dpos.position.column = _json["position"]["character"].asInt() + 1;
+		dpos.position.line = _json["position"]["line"].asInt();
+		dpos.position.column = _json["position"]["character"].asInt();
 		return dpos;
 	}
 
@@ -108,12 +107,12 @@ namespace // {{{ helpers
 		Json::Value json;
 
 		auto const [startLine, startColumn] = _location.source->translatePositionToLineColumn(_location.start);
-		json["start"]["line"] = max(startLine - 1, 0);
-		json["start"]["character"] = max(startColumn - 1, 0);
+		json["start"]["line"] = max(startLine, 0);
+		json["start"]["character"] = max(startColumn, 0);
 
 		auto const [endLine, endColumn] = _location.source->translatePositionToLineColumn(_location.end);
-		json["end"]["line"] = max(endLine - 1, 0);
-		json["end"]["character"] = max(endColumn - 1, 0);
+		json["end"]["line"] = max(endLine, 0);
+		json["end"]["character"] = max(endColumn, 0);
 
 		return json;
 	}
@@ -130,8 +129,8 @@ namespace // {{{ helpers
 	Json::Value toJson(LineColumn _pos)
 	{
 		Json::Value json = Json::objectValue;
-		json["line"] = max(_pos.line - 1, 0);
-		json["character"] = max(_pos.column - 1, 0);
+		json["line"] = max(_pos.line, 0);
+		json["character"] = max(_pos.column, 0);
 
 		return json;
 	}
@@ -331,9 +330,18 @@ frontend::ASTNode const* LanguageServer::findASTNode(LineColumn _position, std::
 		return nullptr;
 
 	frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(_fileName);
+	trace("findASTNode: "s + to_string(_position.line) + ":" + to_string(_position.column));
 	auto const sourcePos = sourceUnit.location().source->translateLineColumnToPosition(_position.line, _position.column);
+
 	if (!sourcePos.has_value())
+	{
+		trace(
+			"findASTNode: could not locate offset for "s +
+			to_string(_position.line) + ":" +
+			to_string(_position.column)
+		);
 		return nullptr;
+	}
 
 	ASTNode const* closestMatch = ASTNodeLocator::locate(sourcePos.value(), sourceUnit);
 
@@ -953,13 +961,14 @@ void LanguageServer::handleMessage(Json::Value const& _jsonMessage)
 			? MessageId{_jsonMessage["id"].asString()}
 			: MessageId{};
 
-	if (auto const handler = m_handlers.find(methodName); handler != m_handlers.end() && handler->second)
+	auto const handler = m_handlers.find(methodName);
+	if (handler == m_handlers.end())
+		m_client->error(id, ErrorCode::MethodNotFound, "Unknown method " + methodName);
+	else if (handler->second)
 	{
 		Json::Value const& jsonArgs = _jsonMessage["params"];
 		handler->second(id, jsonArgs);
 	}
-	else
-		m_client->error(id, ErrorCode::MethodNotFound, "Unknown method " + methodName);
 }
 // }}}
 
