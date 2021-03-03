@@ -117,11 +117,16 @@ namespace // {{{ helpers
 		return json;
 	}
 
-	Json::Value toJson(SourceLocation const& _location)
+	Json::Value toJson(boost::filesystem::path const& _basePath, SourceLocation const& _location)
 	{
 		solAssert(_location.source.get() != nullptr, "");
 		Json::Value item = Json::objectValue;
-		item["uri"] = toFileURI(_location.source->name());
+		// item["uri"] = toFileURI(_location.source->name());
+		// TODO: is this needed here, too?
+		if (_location.source->name().front() == '/')
+			item["uri"] = toFileURI(_location.source->name());
+		else
+			item["uri"] = toFileURI((_basePath / boost::filesystem::path(_location.source->name())).generic_string());
 		item["range"] = toJsonRange(_location);
 		return item;
 	}
@@ -312,7 +317,7 @@ void LanguageServer::validate(vfs::File const& _file)
 		{
 			Json::Value jsonRelated;
 			jsonRelated["message"] = secondary.message;
-			jsonRelated["location"]["uri"] = toFileURI(secondary.sourceName);
+			jsonRelated["location"]["uri"] = toFileURI((m_basePath / boost::filesystem::path(secondary.sourceName)).generic_string());
 			jsonRelated["location"]["range"]["start"] = toJson(LineColumn{secondary.position.line, secondary.startColumn});
 			jsonRelated["location"]["range"]["end"] = toJson(LineColumn{secondary.position.line, secondary.endColumn});
 			jsonDiag["relatedInformation"].append(jsonRelated);
@@ -619,6 +624,8 @@ void LanguageServer::handle_initialize(MessageId _id, Json::Value const& _args)
 	else if (Json::Value rootPath = _args["rootPath"]; rootPath)
 		rootPath = rootPath.asString();
 
+	trace("initialize: root path: '"s + rootPath + "'");
+
 	if (Json::Value value = _args["trace"]; value)
 	{
 		string const name = value.asString();
@@ -823,7 +830,7 @@ void LanguageServer::handle_textDocument_definition(MessageId _id, Json::Value c
 
 	Json::Value reply = Json::arrayValue;
 	for (SourceLocation const& location: locations)
-		reply.append(toJson(location));
+		reply.append(toJson(m_basePath, location));
 	m_client->reply(_id, reply);
 }
 
@@ -916,7 +923,7 @@ void LanguageServer::handle_textDocument_references(MessageId _id, Json::Value c
 
 	Json::Value jsonReply = Json::arrayValue;
 	for (SourceLocation const& location: locations)
-		jsonReply.append(toJson(location));
+		jsonReply.append(toJson(m_basePath, location));
 
 	m_client->reply(_id, jsonReply);
 }
