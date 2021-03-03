@@ -123,19 +123,22 @@ std::optional<int> CharStream::translateLineColumnToPosition(int _line, int _col
 {
 	int line = 0;
 	int column = 0;
+	size_t offset = 0;
 
-	for (size_t i = 0; i < m_source.size(); ++i)
+	while (offset < m_source.size())
 	{
 		if (line == _line && column == _column)
-			return int(i);
+			return int(offset);
 
-		auto const ch = m_source.at(i);
+		auto const ch = m_source.at(offset);
 		if (ch == '\n')
 		{
 			++line;
 			column = 0;
 		}
-		++column;
+		else
+			++column;
+		++offset;
 	}
 
 	return nullopt;
