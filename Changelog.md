@@ -9,6 +9,10 @@ Compiler Features:
 Bugfixes:
  * SMTChecker: Fix internal error on ``FixedBytes`` constant initialized with string literal.
  * SMTChecker: Fix internal error on pushing to ``string`` casted to ``bytes``.
+ * SMTChecker: Fix bug in virtual functions called by constructors.
+
+
+>>>>>>> 53d9d4362 (Fix bug in virtual functions called by constructor.)
 AST Changes:
 
 
