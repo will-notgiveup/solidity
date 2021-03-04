@@ -3016,8 +3016,13 @@ string YulUtilFunctions::conversionFunction(Type const& _from, Type const& _to)
 	}
 	else if (_from.category() == Type::Category::ArraySlice)
 	{
-		solAssert(_to.category() == Type::Category::Array, "");
 		auto const& fromType = dynamic_cast<ArraySliceType const&>(_from);
+		if (_to.category() == Type::Category::FixedBytes)
+		{
+			solAssert(fromType.arrayType().isByteArray(), "Array types other than bytes not convertible to bytesNN.");
+			return bytesToFixedBytesConversionFunction(fromType.arrayType(), dynamic_cast<FixedBytesType const &>(_to));
+		}
+		solAssert(_to.category() == Type::Category::Array, "");
 		auto const& targetType = dynamic_cast<ArrayType const&>(_to);
 
 		solAssert(fromType.arrayType().isImplicitlyConvertibleTo(targetType), "");
@@ -3049,11 +3054,14 @@ string YulUtilFunctions::conversionFunction(Type const& _from, Type const& _to)
 	}
 	else if (_from.category() == Type::Category::Array)
 	{
+		auto const& fromArrayType =  dynamic_cast<ArrayType const&>(_from);
+		if (_to.category() == Type::Category::FixedBytes)
+		{
+			solAssert(fromArrayType.isByteArray(), "Array types other than bytes not convertible to bytesNN.");
+			return bytesToFixedBytesConversionFunction(fromArrayType, dynamic_cast<FixedBytesType const &>(_to));
+		}
 		solAssert(_to.category() == Type::Category::Array, "");
-		return arrayConversionFunction(
-			dynamic_cast<ArrayType const&>(_from),
-			dynamic_cast<ArrayType const&>(_to)
-		);
+		return arrayConversionFunction(fromArrayType, dynamic_cast<ArrayType const&>(_to));
 	}
 
 	if (_from.sizeOnStack() != 1 || _to.sizeOnStack() != 1)
@@ -3270,6 +3278,44 @@ string YulUtilFunctions::conversionFunction(Type const& _from, Type const& _to)
 
 		solAssert(!body.empty(), _from.canonicalName() + " to " + _to.canonicalName());
 		templ("body", body);
+		return templ.render();
+	});
+}
+
+string YulUtilFunctions::bytesToFixedBytesConversionFunction(ArrayType const& _from, FixedBytesType const& _to)
+{
+	solAssert(_from.isByteArray(), "");
+	solAssert(_from.isDynamicallySized(), "");
+	string functionName = "convert_bytes_to_bytesNN_from_" + _from.identifier() + "_to_" + _to.identifier();
+	return m_functionCollector.createFunction(functionName, [&]() {
+		Whiskers templ(R"(
+			function <functionName>(array<?fromCalldata>, len</fromCalldata>) -> value {
+				let length := <arrayLen>(array<?fromCalldata>, len</fromCalldata>)
+				if gt(length, <fixedBytesLen>) { <panic>() }
+				let dataArea := array
+				<?fromMemory>
+					dataArea := <dataLocation>(array)
+				</fromMemory>
+				<?fromStorage>
+					if eq(length, 32) { dataArea := <dataLocation>(array) }
+				</fromStorage>
+				value := <extractValue>(dataArea)
+			}
+		)");
+		templ("functionName", functionName);
+		templ("fromCalldata", _from.dataStoredIn(DataLocation::CallData));
+		templ("arrayLen", arrayLengthFunction(_from));
+		templ("fixedBytesLen", to_string(_to.numBytes()));
+		templ("panic", panicFunction(PanicCode::FixedBytesConversionError));
+		templ("fromMemory", _from.dataStoredIn(DataLocation::Memory));
+		templ("fromStorage", _from.dataStoredIn(DataLocation::Storage));
+		templ("dataLocation", arrayDataAreaFunction(_from));
+		templ(
+			"extractValue",
+			_from.dataStoredIn(DataLocation::Storage) ?
+			readFromStorage(_to, 32 - _to.numBytes(), true) :
+			readFromMemoryOrCalldata(_to, _from.dataStoredIn(DataLocation::CallData))
+		);
 		return templ.render();
 	});
 }
