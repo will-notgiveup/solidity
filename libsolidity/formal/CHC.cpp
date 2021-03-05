@@ -38,6 +38,7 @@
 #include <z3_version.h>
 #endif
 
+#include <charconv>
 #include <queue>
 
 using namespace std;
@@ -1622,7 +1623,25 @@ map<unsigned, vector<unsigned>> CHC::summaryCalls(CHCSolverInterface::CexGraph c
 	map<unsigned, vector<unsigned>> calls;
 
 	auto compare = [&](unsigned _a, unsigned _b) {
-		return _graph.nodes.at(_a).name > _graph.nodes.at(_b).name;
+		auto const& a = _graph.nodes.at(_a).name;
+		auto const& b = _graph.nodes.at(_b).name;
+		auto extract = [&](auto const& _s) {
+			unsigned start = 0;
+			if (_s.rfind("summary_", 0) == 0)
+				start = 8;
+			else if (_s.rfind("nondet_call_", 0) == 0)
+				start = 12;
+			else
+				return 0;
+			auto u = string(begin(_s) + start, end(_s)).find('_');
+			solAssert(u != string::npos, "New \"_\" should be present after predicate id.");
+			int result;
+			auto [p, ec] = std::from_chars(_s.data() + start, _s.data() + u, result);
+			solAssert(ec == std::errc(), "Predicate id should be a number.");
+			return result;
+		};
+
+		return extract(a) > extract(b);
 	};
 
 	queue<pair<unsigned, unsigned>> q;
