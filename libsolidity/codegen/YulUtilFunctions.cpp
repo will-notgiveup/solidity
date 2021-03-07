@@ -3285,19 +3285,17 @@ string YulUtilFunctions::copyStructToStorageFunction(StructType const& _from, St
 		"_to_" +
 		_to.identifier();
 
-	return m_functionCollector.createFunction(functionName, [&]() {
+	return m_functionCollector.createFunction(functionName, [&](auto& _body, auto& _args, auto&) {
+		_args = {"slot", "value"};
 		Whiskers templ(R"(
-			function <functionName>(slot, value) {
-				<?fromStorage> if iszero(eq(slot, value)) { </fromStorage>
-				<#member>
-				{
-					<updateMemberCall>
-				}
-				</member>
-				<?fromStorage> } </fromStorage>
+			<?fromStorage> if iszero(eq(slot, value)) { </fromStorage>
+			<#member>
+			{
+				<updateMemberCall>
 			}
+			</member>
+			<?fromStorage> } </fromStorage>
 		)");
-		templ("functionName", functionName);
 		templ("fromStorage", _from.dataStoredIn(DataLocation::Storage));
 
 		MemberList::MemberMap structMembers = _from.nativeMembers(nullptr);
@@ -3385,7 +3383,7 @@ string YulUtilFunctions::copyStructToStorageFunction(StructType const& _from, St
 		}
 		templ("member", memberParams);
 
-		return templ.render();
+		_body = templ.render();
 	});
 }
 
