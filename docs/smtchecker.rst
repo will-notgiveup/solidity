@@ -404,9 +404,22 @@ that the assertion fails:
      | 		^^^^^^^^^^^^^^^^^
 
 
-******************
-SMTChecker Options
-******************
+*****************************
+SMTChecker Options and Tuning
+*****************************
+
+Timeout
+=======
+
+The SMTChecker uses a hardcoded resource limit (``rlimit``) chosen per solver,
+which is not directly related to time. We chose the ``rlimit`` option as the default
+because it gives more determinism guarantees than time inside the solver.
+
+This options translates roughly to "a few seconds timeout". Of course many properties
+are very complex and need a lot of time to be solved, where determinism does not matter.
+If the SMTChecker does not manage to solve the contract properties with the default ``rlimit``,
+a timeout can be given in milliseconds via the CLI option ``--model-checker-timeout <time>`` or
+the JSON option ``settings.modelChecker.timeout=<time>``, where 0 means no timeout.
 
 Model Checking Engines
 ======================
