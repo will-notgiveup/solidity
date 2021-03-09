@@ -404,16 +404,60 @@ that the assertion fails:
      | 		^^^^^^^^^^^^^^^^^
 
 
+******************
+SMTChecker Options
+******************
+
+Model Checking Engines
+======================
+
+The SMTChecker module implements two different reasoning engines, a Bounded
+Model Checker (BMC) and a system of Constrained Horn Clauses (CHC).  Both
+engines are currently under development, and have different characteristics.
+The engines are independent and every property warning states from which engine
+it came from. Notice that all the examples above with counterexamples were
+reported by CHC, the more powerful engine.
+
+By default both engines are used, where CHC runs first, and every property that
+was not proven is passed over to BMC. You can choose a specific engine via the CLI
+option ``--model-checker-engine {all,bmc,chc,none}`` or the JSON option
+``settings.modelChecker.engine={all,bmc,chc,none}``.
+
+Bounded Model Checker (BMC)
+---------------------------
+
+The BMC engine analyzes functions in isolation, that is, it does not take the
+overall behavior of the contract throughout many transactions into account when
+analyzing each function.  Loops are also ignored in this engine at the moment.
+Internal function calls are inlined as long as they are not recursive, direct
+or indirectly. External function calls are inlined if possible, and knowledge
+that is potentially affected by reentrancy is erased.
+
+The characteristics above make BMC easily prone to reporting false positives,
+but it is also lightweight and should be able to quickly find small local bugs.
+
+Constrained Horn Clauses (CHC)
+------------------------------
+
+The Solidity contract's Control Flow Graph (CFG) is modelled as a system of
+Horn clauses, where the life cycle of the contract is represented by a loop
+that can visit every public/external function non-deterministically. This way,
+the behavior of the entire contract over an unbounded number of transactions
+is taken into account when analyzing any function. Loops are fully supported
+by this engine. Internal function calls are supported, and external function
+calls assume the called code is unknown and can do anything.
+
+The CHC engine is much more powerful than BMC in terms of what it can prove,
+and might require more computing resources.
+
+
 ********************
 SMTChecker Internals
 ********************
 
-The SMTChecker traverses the Solidity AST creating and collecting program constraints.
-When it encounters a verification target, an SMT solver is invoked to determine the outcome.
-If a check fails, the SMTChecker provides specific input values that lead to the failure.
-
-While the SMTChecker encodes Solidity code into SMT constraints, it contains two
-reasoning engines that use that encoding in different ways.
+Both engines above traverse the Solidity AST creating and collecting program constraints.
+When they encounter a verification target, an SMT or Horn solver is invoked to determine the outcome.
+If a check fails, the SMTChecker may provide specific input values that lead to the failure.
 
 SMT Encoding
 ============
@@ -444,40 +488,6 @@ integer, where their unsupported operations are ignored.
 For more details on how the SMT encoding works internally, see the paper
 `SMT-based Verification of Solidity Smart Contracts <https://github.com/leonardoalt/text/blob/master/solidity_isola_2018/main.pdf>`_.
 
-Model Checking Engines
-======================
-
-The SMTChecker module implements two different reasoning engines that use the
-SMT encoding above, a Bounded Model Checker (BMC) and a system of Constrained
-Horn Clauses (CHC).  Both engines are currently under development, and have
-different characteristics.
-
-Bounded Model Checker (BMC)
----------------------------
-
-The BMC engine analyzes functions in isolation, that is, it does not take the
-overall behavior of the contract throughout many transactions into account when
-analyzing each function.  Loops are also ignored in this engine at the moment.
-Internal function calls are inlined as long as they are not recursive, direct
-or indirectly. External function calls are inlined if possible, and knowledge
-that is potentially affected by reentrancy is erased.
-
-The characteristics above make BMC easily prone to reporting false positives,
-but it is also lightweight and should be able to quickly find small local bugs.
-
-Constrained Horn Clauses (CHC)
-------------------------------
-
-The Solidity contract's Control Flow Graph (CFG) is modelled as a system of
-Horn clauses, where the lifecycle of the contract is represented by a loop
-that can visit every public/external function non-deterministically. This way,
-the behavior of the entire contract over an unbounded number of transactions
-is taken into account when analyzing any function. Loops are fully supported
-by this engine. Internal function calls are supported, but external function
-calls are currently unsupported.
-
-The CHC engine is much more powerful than BMC in terms of what it can prove,
-and might require more computing resources.
 
 Abstraction and False Positives
 ===============================
