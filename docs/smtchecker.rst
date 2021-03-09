@@ -230,6 +230,105 @@ gives us:
 
 
 
+State Properties
+================
+
+So far the examples only demonstrated the use of the SMTChecker over pure code,
+proving properties about specific operations or algorithms.
+A common type of properties in smart contracts are properties that involve the
+state of the contract. Multiple transactions might be needed to make an assertion
+fail for such a property.
+
+As an example, consider a 2D grid where both axis have coordinates in the range (-2^128, 2^128 - 1).
+Let us place a robot at position (0, 0). The robot can only move diagonally, once place at a time,
+and cannot move outside the grid. The robot's state machine can be represented by the smart contract
+below.
+
+.. code-block:: Solidity
+
+    pragma experimental SMTChecker;
+
+
+    contract Robot {
+        int x = 0;
+        int y = 0;
+
+        modifier wall {
+            require(x > type(int128).min && x < type(int128).max);
+            require(y > type(int128).min && y < type(int128).max);
+            _;
+        }
+
+        function moveLeftUp() wall public {
+            --x;
+            ++y;
+        }
+
+        function moveLeftDown() wall public {
+            --x;
+            --y;
+        }
+
+        function moveRightUp() wall public {
+            ++x;
+            ++y;
+        }
+
+        function moveRightDown() wall public {
+            ++x;
+            --y;
+        }
+
+        function inv() public view {
+            assert((x + y) % 2 == 0);
+        }
+    }
+
+Function ``inv`` represents an invariant of the state machine that ``x + y``
+must be even.
+The SMTChecker manages to prove that regardless how many commands we give the
+robot, even if infinitely many, the invariant can *never* fail. The interested
+reader may want to prove that fact manually as well.  Hint: this invariant is
+inductive.
+
+We can also trick the SMTChecker into giving us a path to a certain position.
+We know that position (2, 4) is reachable, because 2 + 4 = 6 is even. Let us add
+the property that (2, 4) is *not* reachable, by adding the following function.
+
+.. code-block:: Solidity
+
+    function reach_2_4() public view {
+        assert(!(x == 2 && y == 4));
+    }
+
+We know that this property is false, but while proving that the property is false,
+the SMTChecker gives us exactly *how* to reach (2, 4):
+
+.. code-block:: bash
+
+  Warning: CHC: Assertion violation happens here.
+  Counterexample:
+  x = 2, y = 4
+  
+  Transaction trace:
+  Robot.constructor()
+  State: x = 0, y = 0
+  Robot.moveLeftUp()
+  State: x = (- 1), y = 1
+  Robot.moveRightUp()
+  State: x = 0, y = 2
+  Robot.moveRightUp()
+  State: x = 1, y = 3
+  Robot.moveRightUp()
+  State: x = 2, y = 4
+  Robot.reach_2_4()
+    --> r.sol:35:4:
+     |
+  35 | 			assert(!(x == 2 && y == 4));
+     | 			^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+
 ********************
 SMTChecker Internals
 ********************
