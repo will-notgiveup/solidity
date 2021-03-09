@@ -496,35 +496,9 @@ Both engines above traverse the Solidity AST creating and collecting program con
 When they encounter a verification target, an SMT or Horn solver is invoked to determine the outcome.
 If a check fails, the SMTChecker may provide specific input values that lead to the failure.
 
-SMT Encoding
-============
-
-The SMT encoding tries to be as precise as possible, mapping Solidity types
-and expressions to their closest `SMT-LIB <http://smtlib.cs.uiowa.edu/>`_
-representation, as shown in the table below.
-
-+-----------------------+--------------------------------+-----------------------------+
-|Solidity type          |SMT sort                        |Theories (quantifier-free)   |
-+=======================+================================+=============================+
-|Boolean                |Bool                            |Bool                         |
-+-----------------------+--------------------------------+-----------------------------+
-|intN, uintN, address,  |Integer                         |LIA, NIA                     |
-|bytesN, enum           |                                |                             |
-+-----------------------+--------------------------------+-----------------------------+
-|array, mapping, bytes, |Tuple                           |Datatypes, Arrays, LIA       |
-|string                 |(Array elements, Integer length)|                             |
-+-----------------------+--------------------------------+-----------------------------+
-|struct                 |Tuple                           |Datatypes                    |
-+-----------------------+--------------------------------+-----------------------------+
-|other types            |Integer                         |LIA                          |
-+-----------------------+--------------------------------+-----------------------------+
-
-Types that are not yet supported are abstracted by a single 256-bit unsigned
-integer, where their unsupported operations are ignored.
-
-For more details on how the SMT encoding works internally, see the paper
-`SMT-based Verification of Solidity Smart Contracts <https://github.com/leonardoalt/text/blob/master/solidity_isola_2018/main.pdf>`_.
-
+********************
+Other Considerations
+********************
 
 Abstraction and False Positives
 ===============================
@@ -535,46 +509,63 @@ erasing knowledge or using a non-precise type). If it determines that a
 verification target is safe, it is indeed safe, that is, there are no false
 negatives (unless there is a bug in the SMTChecker).
 
+Function Calls
+--------------
+
 In the BMC engine, function calls to the same contract (or base contracts) are
 inlined when possible, that is, when their implementation is available.  Calls
 to functions in other contracts are not inlined even if their code is
 available, since we cannot guarantee that the actual deployed code is the same.
 
 The CHC engine creates nonlinear Horn clauses that use summaries of the called
-functions to support internal function calls. The same approach can and will be
-used for external function calls, but the latter requires more work regarding
-the entire state of the blockchain and is still unimplemented.
+functions to support internal function calls. External function calls are treated
+as calls to unknown code, including potential reentrant calls.
 
 Complex pure functions are abstracted by an uninterpreted function (UF) over
 the arguments.
 
 +-----------------------------------+--------------------------------------+
-|Functions                          |SMT behavior                          |
+|Functions                          |BMC/CHC behavior                      |
 +===================================+======================================+
-|``assert``                         |Verification target                   |
+|``assert``                         |Verification target.                  |
 +-----------------------------------+--------------------------------------+
-|``require``                        |Assumption                            |
+|``require``                        |Assumption.                           |
 +-----------------------------------+--------------------------------------+
-|internal                           |BMC: Inline function call             |
-|                                   |CHC: Function summaries               |
+|internal call                      |BMC: Inline function call.            |
+|                                   |CHC: Function summaries.              |
 +-----------------------------------+--------------------------------------+
-|external                           |BMC: Inline function call or          |
+|external call to known code        |BMC: Inline function call or          |
 |                                   |erase knowledge about state variables |
 |                                   |and local storage references.         |
-|                                   |CHC: Function summaries and erase     |
-|                                   |state knowledge.                      |
+|                                   |CHC: Assume called code is unknown.   |
+|                                   |Try to infer invariants that hold     |
+|                                   |after the call returns.               |
 +-----------------------------------+--------------------------------------+
-|``gasleft``, ``blockhash``,        |Abstracted with UF                    |
+|Storage array push/pop             |Supported precisely.                  |
+|                                   |Checks whether it is popping an       |
+|                                   |empty array.                          |
++-----------------------------------+--------------------------------------+
+|ABI functions                      |Abstracted with UF.
++-----------------------------------+--------------------------------------+
+|``addmod``, ``mulmod``             |Supported precisely.                  |
++-----------------------------------+--------------------------------------+
+|``gasleft``, ``blockhash``,        |Abstracted with UF.                   |
 |``keccak256``, ``ecrecover``       |                                      |
-|``ripemd160``, ``addmod``,         |                                      |
-|``mulmod``                         |                                      |
+|``ripemd160``                      |                                      |
 +-----------------------------------+--------------------------------------+
 |pure functions without             |Abstracted with UF                    |
 |implementation (external or        |                                      |
 |complex)                           |                                      |
 +-----------------------------------+--------------------------------------+
-|external functions without         |BMC: Unsupported                      |
-|implementation                     |CHC: Nondeterministic summary         |
+|external functions without         |BMC: Erase state knowledge and assume |
+|implementation                     |result is nondeterminisc.             |
+|                                   |CHC: Nondeterministic summary.        |
+|                                   |Try to infer invariants that hold     |
+|                                   |after the call returns.               |
++-----------------------------------+--------------------------------------+
+|transfer                           |BMC: Checks whether the contract's    |
+|                                   |balance is sufficient.                |
+|                                   |CHC: does not yet perform the check.  |
 +-----------------------------------+--------------------------------------+
 |others                             |Currently unsupported                 |
 +-----------------------------------+--------------------------------------+
@@ -585,7 +576,7 @@ not mean loss of proving power.
 ::
 
     // SPDX-License-Identifier: GPL-3.0
-    pragma solidity >=0.5.0;
+    pragma solidity >=0.8.0;
     pragma experimental SMTChecker;
     // This may report a warning if no SMT solver available.
 
@@ -617,14 +608,8 @@ deterministic, and can be easily done for pure functions.  It is however
 difficult to do this with general external functions, since they might depend
 on state variables.
 
-External function calls also imply that any current knowledge that the
-SMTChecker might have regarding mutable state variables needs to be erased to
-guarantee no false negatives, since the called external function might direct
-or indirectly call a function in the analyzed contract that changes state
-variables.
-
 Reference Types and Aliasing
-=============================
+----------------------------
 
 Solidity implements aliasing for reference types with the same :ref:`data
 location<data-location>`.
@@ -705,3 +690,35 @@ push: If the ``push`` operation is applied to an array of length 2^256 - 1, its
 length silently overflows.
 However, this is unlikely to happen in practice, since the operations required
 to grow the array to that point would take billions of years to execute.
+
+
+SMT Encoding
+============
+
+The SMT encoding tries to be as precise as possible, mapping Solidity types
+and expressions to their closest `SMT-LIB <http://smtlib.cs.uiowa.edu/>`_
+representation, as shown in the table below.
+
++-----------------------+--------------------------------+-----------------------------+
+|Solidity type          |SMT sort                        |Theories (quantifier-free)   |
++=======================+================================+=============================+
+|Boolean                |Bool                            |Bool                         |
++-----------------------+--------------------------------+-----------------------------+
+|intN, uintN, address,  |Integer                         |LIA, NIA                     |
+|bytesN, enum           |                                |                             |
++-----------------------+--------------------------------+-----------------------------+
+|array, mapping, bytes, |Tuple                           |Datatypes, Arrays, LIA       |
+|string                 |(Array elements, Integer length)|                             |
++-----------------------+--------------------------------+-----------------------------+
+|struct                 |Tuple                           |Datatypes                    |
++-----------------------+--------------------------------+-----------------------------+
+|other types            |Integer                         |LIA                          |
++-----------------------+--------------------------------+-----------------------------+
+
+Types that are not yet supported are abstracted by a single 256-bit unsigned
+integer, where their unsupported operations are ignored.
+
+For more details on how the SMT encoding works internally, see the paper
+`SMT-based Verification of Solidity Smart Contracts <https://github.com/leonardoalt/text/blob/master/solidity_isola_2018/main.pdf>`_.
+
+
