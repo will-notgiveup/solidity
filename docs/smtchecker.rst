@@ -14,8 +14,8 @@ difference between what you did (the specification) and how you did it
 (the actual implementation). You still need to check whether the specification
 is what you wanted and that you did not miss any unintended effects of it.
 
-Solidity implements a formal verification approach based on SMT solving.  The
-SMTChecker module automatically tries to prove that the code satisfies the
+Solidity implements a formal verification approach based on SMT and Horn solving.
+The SMTChecker module automatically tries to prove that the code satisfies the
 specification given by ``require/assert`` statements. That is, it considers
 ``require`` statements as assumptions and tries to prove that the conditions
 inside ``assert`` statements are always true.  If an assertion failure is
@@ -45,8 +45,8 @@ to enable it via :ref:`a pragma directive<smt_checker>`.
   *very hard* and sometimes *impossible* to solve automatically in the
   general case.  Therefore, several properties might not be solved or might
   lead to false positives for large contracts. Every proven property should
-  be seen as an important achievement. For advanced users, see `ref: ...`
-  to learn a few SMTChecker options that might help proving more complex
+  be seen as an important achievement. For advanced users, see :ref:`SMTChecker Tuning <smtchecker_options>`
+  to learn a few options that might help proving more complex
   properties.
   
 ********
@@ -100,7 +100,7 @@ Here, it reports the following:
       |                    ^^^^^^^
 
 If we add ``require`` statements that filter out overflow cases,
-the SMTChecker proves that no overflow is reachable:
+the SMTChecker proves that no overflow is reachable (by not reporting warnings):
 
 .. code-block:: Solidity
 
@@ -404,6 +404,8 @@ that the assertion fails:
      | 		^^^^^^^^^^^^^^^^^
 
 
+.. _smtchecker_options:
+
 *****************************
 SMTChecker Options and Tuning
 *****************************
@@ -412,7 +414,7 @@ Timeout
 =======
 
 The SMTChecker uses a hardcoded resource limit (``rlimit``) chosen per solver,
-which is not directly related to time. We chose the ``rlimit`` option as the default
+which is not precisely related to time. We chose the ``rlimit`` option as the default
 because it gives more determinism guarantees than time inside the solver.
 
 This options translates roughly to "a few seconds timeout". Of course many properties
@@ -440,7 +442,7 @@ list of one or more verification targets. The keywords that represent the target
 - None of the above: ``none``.
 
 A common subset of targets might be, for example:
-``-model-checker-targets assert,overflow``.
+``--model-checker-targets assert,overflow``.
 
 There is no precise heuristic on how and when to split verification targets,
 but it can be useful especially when dealing with large contracts.
@@ -488,20 +490,9 @@ The CHC engine is much more powerful than BMC in terms of what it can prove,
 and might require more computing resources.
 
 
-********************
-SMTChecker Internals
-********************
-
-Both engines above traverse the Solidity AST creating and collecting program constraints.
-When they encounter a verification target, an SMT or Horn solver is invoked to determine the outcome.
-If a check fails, the SMTChecker may provide specific input values that lead to the failure.
-
-********************
-Other Considerations
-********************
-
+*******************************
 Abstraction and False Positives
-===============================
+*******************************
 
 The SMTChecker implements abstractions in an incomplete and sound way: If a bug
 is reported, it might be a false positive introduced by abstractions (due to
@@ -515,7 +506,7 @@ If you are sure of a false positive, adding ``require`` statements in the code
 with more information may also give some more power to the solver.
 
 SMT Encoding and Types
-----------------------
+======================
 
 The SMTChecker encoding tries to be as precise as possible, mapping Solidity types
 and expressions to their closest `SMT-LIB <http://smtlib.cs.uiowa.edu/>`_
@@ -544,7 +535,7 @@ For more details on how the SMT encoding works internally, see the paper
 `SMT-based Verification of Solidity Smart Contracts <https://github.com/leonardoalt/text/blob/master/solidity_isola_2018/main.pdf>`_.
 
 Function Calls
---------------
+==============
 
 In the BMC engine, function calls to the same contract (or base contracts) are
 inlined when possible, that is, when their implementation is available.  Calls
@@ -643,7 +634,7 @@ difficult to do this with general external functions, since they might depend
 on state variables.
 
 Reference Types and Aliasing
-----------------------------
+============================
 
 Solidity implements aliasing for reference types with the same :ref:`data
 location<data-location>`.
@@ -714,8 +705,9 @@ are located in storage, even though they also have type ``uint[]``.  However,
 if ``d`` was assigned, we would need to clear knowledge about ``array`` and
 vice-versa.
 
+**********************
 Real World Assumptions
-======================
+**********************
 
 Some scenarios can be expressed in Solidity and the EVM, but are expected to
 never occur in practice.
