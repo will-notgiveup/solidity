@@ -579,7 +579,7 @@ the arguments.
 |                                   |Checks whether it is popping an       |
 |                                   |empty array.                          |
 +-----------------------------------+--------------------------------------+
-|ABI functions                      |Abstracted with UF.
+|ABI functions                      |Abstracted with UF.                   |
 +-----------------------------------+--------------------------------------+
 |``addmod``, ``mulmod``             |Supported precisely.                  |
 +-----------------------------------+--------------------------------------+
