@@ -509,6 +509,11 @@ erasing knowledge or using a non-precise type). If it determines that a
 verification target is safe, it is indeed safe, that is, there are no false
 negatives (unless there is a bug in the SMTChecker).
 
+If a target cannot be proven you can try to help the solver by using the tuning
+options in the previous section.
+If you are sure of a false positive, adding ``require`` statements in the code
+with more information may also give some more power to the solver.
+
 Function Calls
 --------------
 
