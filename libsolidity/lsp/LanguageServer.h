@@ -99,7 +99,6 @@ protected:
 	void changeConfiguration(Json::Value const&);
 	void documentContentUpdated(std::string const& _path, std::optional<int> _documentVersion, std::string const& _fullContentChange);
 	void documentContentUpdated(std::string const& _path, std::optional<int> _version, LineColumnRange _range, std::string const& _text);
-	void documentClosed(std::string const& _path);
 
 	/// Find all semantically equivalent occurrences of the symbol the current cursor is located at.
 	///
@@ -125,6 +124,12 @@ protected:
 	frontend::ASTNode const* findASTNode(langutil::LineColumn _position, std::string const& _fileName);
 
 	std::optional<langutil::SourceLocation> declarationPosition(frontend::Declaration const* _declaration);
+
+	std::vector<langutil::SourceLocation> findAllReferences(
+		frontend::Declaration const* _declaration,
+		std::string const& _sourceIdentifierName,
+		frontend::SourceUnit const& _sourceUnit
+	);
 
 	void findAllReferences(
 		frontend::Declaration const* _declaration,

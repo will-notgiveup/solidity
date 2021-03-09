@@ -41,11 +41,6 @@ struct DocumentPosition {
 	langutil::LineColumn position;
 };
 
-struct ServerId {
-	std::string serverName;
-	std::string serverVersion;
-};
-
 enum class DocumentHighlightKind {
 	Unspecified,
 	Text,           //!< a textual occurrence

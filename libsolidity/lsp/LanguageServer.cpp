@@ -44,101 +44,93 @@ namespace solidity::lsp {
 
 namespace // {{{ helpers
 {
-	string toFileURI(std::string const& _path)
+
+string toFileURI(std::string const& _path)
+{
+	return "file://" + _path;
+}
+
+class ASTNodeLocator: public ASTConstVisitor
+{
+public:
+	static ASTNode const* locate(int _pos, SourceUnit const& _sourceUnit)
 	{
-		return "file://" + _path;
+		ASTNodeLocator locator{_pos};
+		_sourceUnit.accept(locator);
+		return locator.m_closestMatch;
 	}
 
-	class ASTNodeLocator : public ASTConstVisitor
+	bool visitNode(ASTNode const& _node) override
 	{
-	public:
-		static ASTNode const* locate(int _pos, SourceUnit const& _sourceUnit)
+		if (_node.location().contains(m_pos))
 		{
-			ASTNodeLocator locator{_pos};
-			_sourceUnit.accept(locator);
-			return locator.m_closestMatch;
+			m_closestMatch = &_node;
+			return true;
 		}
-
-		bool visitNode(ASTNode const& _node) override
-		{
-			if (_node.location().start <= m_pos && m_pos <= _node.location().end)
-			{
-				m_closestMatch = &_node;
-				return true;
-			}
-			return false;
-		}
-
-	private:
-		explicit ASTNodeLocator(int _pos): m_pos{_pos}, m_closestMatch{nullptr} {}
-
-		int m_pos;
-		ASTNode const* m_closestMatch;
-	};
-
-	optional<string> extractPathFromFileURI(std::string const& _uri)
-	{
-		if (!boost::starts_with(_uri, "file://"))
-			return nullopt;
-
-		return _uri.substr(7);
+		return false;
 	}
 
-	void loadTextDocumentPosition(DocumentPosition& _params, Json::Value const& _json)
-	{
-		_params.path = extractPathFromFileURI(_json["textDocument"]["uri"].asString()).value();
-		_params.position.line = _json["position"]["line"].asInt();
-		_params.position.column = _json["position"]["character"].asInt();
-	}
+private:
+	explicit ASTNodeLocator(int _pos): m_pos{_pos}, m_closestMatch{nullptr} {}
 
-	DocumentPosition extractDocumentPosition(Json::Value const& _json)
-	{
-		DocumentPosition dpos{};
-		dpos.path = extractPathFromFileURI(_json["textDocument"]["uri"].asString()).value();
-		dpos.position.line = _json["position"]["line"].asInt();
-		dpos.position.column = _json["position"]["character"].asInt();
-		return dpos;
-	}
+	int m_pos;
+	ASTNode const* m_closestMatch;
+};
 
-	Json::Value toJsonRange(SourceLocation const& _location)
-	{
-		solAssert(_location.source.get() != nullptr, "");
+optional<string> extractPathFromFileURI(std::string const& _uri)
+{
+	if (!boost::starts_with(_uri, "file://"))
+		return nullopt;
 
-		Json::Value json;
+	return _uri.substr(7);
+}
 
-		auto const [startLine, startColumn] = _location.source->translatePositionToLineColumn(_location.start);
-		json["start"]["line"] = max(startLine, 0);
-		json["start"]["character"] = max(startColumn, 0);
+DocumentPosition extractDocumentPosition(Json::Value const& _json)
+{
+	DocumentPosition dpos{};
+	dpos.path = extractPathFromFileURI(_json["textDocument"]["uri"].asString()).value();
+	dpos.position.line = _json["position"]["line"].asInt();
+	dpos.position.column = _json["position"]["character"].asInt();
+	return dpos;
+}
 
-		auto const [endLine, endColumn] = _location.source->translatePositionToLineColumn(_location.end);
-		json["end"]["line"] = max(endLine, 0);
-		json["end"]["character"] = max(endColumn, 0);
+Json::Value toJson(LineColumn _pos)
+{
+	Json::Value json = Json::objectValue;
+	json["line"] = max(_pos.line, 0);
+	json["character"] = max(_pos.column, 0);
 
-		return json;
-	}
+	return json;
+}
 
-	Json::Value toJson(boost::filesystem::path const& _basePath, SourceLocation const& _location)
-	{
-		solAssert(_location.source.get() != nullptr, "");
-		Json::Value item = Json::objectValue;
-		// item["uri"] = toFileURI(_location.source->name());
-		// TODO: is this needed here, too?
-		if (_location.source->name().front() == '/')
-			item["uri"] = toFileURI(_location.source->name());
-		else
-			item["uri"] = toFileURI((_basePath / boost::filesystem::path(_location.source->name())).generic_string());
-		item["range"] = toJsonRange(_location);
-		return item;
-	}
+Json::Value toJsonRange(int _startLine, int _startColumn, int _endLine, int _endColumn)
+{
+	Json::Value json;
+	json["start"] = toJson({_startLine, _startColumn});
+	json["end"] = toJson({_endLine, _endColumn});
+	return json;
+}
 
-	Json::Value toJson(LineColumn _pos)
-	{
-		Json::Value json = Json::objectValue;
-		json["line"] = max(_pos.line, 0);
-		json["character"] = max(_pos.column, 0);
+Json::Value toJsonRange(SourceLocation const& _location)
+{
+	solAssert(_location.source, "");
+	auto const [startLine, startColumn] = _location.source->translatePositionToLineColumn(_location.start);
+	auto const [endLine, endColumn] = _location.source->translatePositionToLineColumn(_location.end);
+	return toJsonRange(startLine, startColumn, endLine, endColumn);
+}
 
-		return json;
-	}
+Json::Value toJson(boost::filesystem::path const& _basePath, SourceLocation const& _location)
+{
+	solAssert(_location.source.get() != nullptr, "");
+	Json::Value item = Json::objectValue;
+	if (_location.source->name().front() == '/')
+		item["uri"] = toFileURI(_location.source->name());
+	else
+		item["uri"] = toFileURI((_basePath / boost::filesystem::path(_location.source->name())).generic_string());
+	item["range"] = toJsonRange(_location);
+	return item;
+}
+
 } // }}} end helpers
 
 LanguageServer::LanguageServer(Logger _logger, istream& _in, ostream& _out):
@@ -152,9 +144,7 @@ LanguageServer::LanguageServer(Logger _logger, istream& _in, ostream& _out):
 		{"workspace/didChangeConfiguration", bind(&LanguageServer::handle_workspace_didChangeConfiguration, this, _1, _2)},
 		{"textDocument/didOpen", bind(&LanguageServer::handle_textDocument_didOpen, this, _1, _2)},
 		{"textDocument/didChange", bind(&LanguageServer::handle_textDocument_didChange, this, _1, _2)},
-		{"textDocument/didClose", [this](auto, Json::Value const& _args) {
-			documentClosed(extractPathFromFileURI(_args["textDocument"]["uri"].asString()).value());
-		}},
+		{"textDocument/didClose", [](auto, auto) {/*nothing for now*/}},
 		{"textDocument/definition", bind(&LanguageServer::handle_textDocument_definition, this, _1, _2)},
 		{"textDocument/documentHighlight", bind(&LanguageServer::handle_textDocument_highlight, this, _1, _2)},
 		{"textDocument/references", bind(&LanguageServer::handle_textDocument_references, this, _1, _2)},
@@ -219,11 +209,6 @@ void LanguageServer::documentContentUpdated(string const& _path, optional<int> _
 	validate(*file);
 }
 
-void LanguageServer::documentClosed(string const& _path)
-{
-	log("LanguageServer: didClose: " + _path);
-}
-
 void LanguageServer::validateAll()
 {
 	for (reference_wrapper<vfs::File const> const& file: m_vfs.files())
@@ -281,7 +266,7 @@ void LanguageServer::compile(vfs::File const& _file)
 
 	trace("compile: using EVM "s + m_evmVersion.name());
 
-	m_compilerStack->compile();
+	m_compilerStack->compile(CompilerStack::State::AnalysisPerformed);
 }
 
 void LanguageServer::validate(vfs::File const& _file)
@@ -310,16 +295,20 @@ void LanguageServer::validate(vfs::File const& _file)
 		if (message.errorId.has_value())
 			jsonDiag["code"] = Json::UInt64{message.errorId.value().error};
 
-		jsonDiag["range"]["start"] = toJson(LineColumn{message.primary.position.line, message.primary.startColumn});
-		jsonDiag["range"]["end"] = toJson(LineColumn{message.primary.position.line, message.primary.endColumn});
+		jsonDiag["range"] = toJsonRange(
+			message.primary.position.line, message.primary.startColumn,
+			message.primary.position.line, message.primary.endColumn
+		);
 
 		for (SourceReference const& secondary: message.secondary)
 		{
 			Json::Value jsonRelated;
 			jsonRelated["message"] = secondary.message;
 			jsonRelated["location"]["uri"] = toFileURI((m_basePath / boost::filesystem::path(secondary.sourceName)).generic_string());
-			jsonRelated["location"]["range"]["start"] = toJson(LineColumn{secondary.position.line, secondary.startColumn});
-			jsonRelated["location"]["range"]["end"] = toJson(LineColumn{secondary.position.line, secondary.endColumn});
+			jsonRelated["location"]["range"] = toJsonRange(
+				secondary.position.line, secondary.startColumn,
+				secondary.position.line, secondary.endColumn
+			);
 			jsonDiag["relatedInformation"].append(jsonRelated);
 		}
 
@@ -386,6 +375,18 @@ optional<SourceLocation> LanguageServer::declarationPosition(frontend::Declarati
 	return nullopt;
 }
 
+std::vector<SourceLocation> LanguageServer::findAllReferences(
+	frontend::Declaration const* _declaration,
+	string const& _sourceIdentifierName,
+	frontend::SourceUnit const& _sourceUnit
+)
+{
+	std::vector<SourceLocation> output;
+	for (DocumentHighlight& highlight: ReferenceCollector::collect(_declaration, _sourceUnit, _sourceIdentifierName))
+		output.emplace_back(move(highlight.location));
+	return output;
+}
+
 void LanguageServer::findAllReferences(
 	frontend::Declaration const* _declaration,
 	string const& _sourceIdentifierName,
@@ -420,33 +421,34 @@ vector<SourceLocation> LanguageServer::references(DocumentPosition _documentPosi
 		return {};
 	}
 
-	auto output = vector<SourceLocation>{};
 	if (auto const sourceIdentifier = dynamic_cast<Identifier const*>(sourceNode))
 	{
 		auto const sourceName = _documentPosition.path;
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
 
+		vector<SourceLocation> output;
 		if (auto decl = sourceIdentifier->annotation().referencedDeclaration)
-			findAllReferences(decl, decl->name(), sourceUnit, output);
+			output += findAllReferences(decl, decl->name(), sourceUnit);
 
 		for (auto const decl: sourceIdentifier->annotation().candidateDeclarations)
-			findAllReferences(decl, decl->name(), sourceUnit, output);
+			output += findAllReferences(decl, decl->name(), sourceUnit);
+		return output;
 	}
 	else if (auto const decl = dynamic_cast<VariableDeclaration const*>(sourceNode))
 	{
 		auto const sourceName = _documentPosition.path;
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		findAllReferences(decl, decl->name(), sourceUnit, output);
+		return findAllReferences(decl, decl->name(), sourceUnit);
 	}
 	else if (auto const* functionDefinition = dynamic_cast<FunctionDefinition const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		findAllReferences(functionDefinition, functionDefinition->name(), sourceUnit, output);
+		return findAllReferences(functionDefinition, functionDefinition->name(), sourceUnit);
 	}
 	else if (auto const* enumDef = dynamic_cast<EnumDefinition const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		findAllReferences(enumDef, enumDef->name(), sourceUnit, output);
+		return findAllReferences(enumDef, enumDef->name(), sourceUnit);
 	}
 	else if (auto const memberAccess = dynamic_cast<MemberAccess const*>(sourceNode))
 	{
@@ -454,18 +456,18 @@ vector<SourceLocation> LanguageServer::references(DocumentPosition _documentPosi
 		{
 			auto const sourceName = _documentPosition.path;
 			frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-			findAllReferences(decl, memberAccess->memberName(), sourceUnit, output);
+			return findAllReferences(decl, memberAccess->memberName(), sourceUnit);
 		}
+		return {};
 	}
 	else if (auto const* importDef = dynamic_cast<ImportDirective const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		findAllReferences(importDef, importDef->name(), sourceUnit, output);
+		return findAllReferences(importDef, importDef->name(), sourceUnit);
 	}
-	else
-		trace("references: not an identifier: "s + typeid(*sourceNode).name());
 
-	return output;
+	trace("references: not an identifier: "s + typeid(*sourceNode).name());
+	return {};
 }
 
 vector<DocumentHighlight> LanguageServer::semanticHighlight(DocumentPosition _documentPosition)
@@ -492,14 +494,13 @@ vector<DocumentHighlight> LanguageServer::semanticHighlight(DocumentPosition _do
 		sourceNode->location().text()
 	);
 
-	auto output = vector<DocumentHighlight>{};
-
 	// TODO: ImportDirective: hovering a symbol of an import directive should highlight all uses of that symbol.
 	if (auto const* sourceIdentifier = dynamic_cast<Identifier const*>(sourceNode))
 	{
 		auto const sourceName = _documentPosition.path;
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
 
+		vector<DocumentHighlight> output;
 		if (sourceIdentifier->annotation().referencedDeclaration)
 			output += ReferenceCollector::collect(sourceIdentifier->annotation().referencedDeclaration, sourceUnit, sourceIdentifier->name());
 
@@ -508,17 +509,18 @@ vector<DocumentHighlight> LanguageServer::semanticHighlight(DocumentPosition _do
 
 		for (Declaration const* declaration: sourceIdentifier->annotation().overloadedDeclarations)
 			output += ReferenceCollector::collect(declaration, sourceUnit, sourceIdentifier->name());
+		return output;
 	}
 	else if (auto const* varDecl = dynamic_cast<VariableDeclaration const*>(sourceNode))
 	{
 		auto const sourceName = _documentPosition.path;
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		output = ReferenceCollector::collect(varDecl, sourceUnit, varDecl->name());
+		return ReferenceCollector::collect(varDecl, sourceUnit, varDecl->name());
 	}
 	else if (auto const* structDef = dynamic_cast<StructDefinition const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		output = ReferenceCollector::collect(structDef, sourceUnit, structDef->name());
+		return ReferenceCollector::collect(structDef, sourceUnit, structDef->name());
 	}
 	else if (auto const* memberAccess = dynamic_cast<MemberAccess const*>(sourceNode))
 	{
@@ -531,19 +533,15 @@ vector<DocumentHighlight> LanguageServer::semanticHighlight(DocumentPosition _do
 
 			if (auto const* enumType = dynamic_cast<EnumType const*>(ttype->actualType()))
 			{
-				auto const& enumMembers = enumType->enumDefinition().members();
-				if (enumMembers.empty())
-					trace("enumType members are empty");
-
 				// find the definition
-				for (auto const& enumMember: enumMembers)
+				vector<DocumentHighlight> output;
+				for (auto const& enumMember: enumType->enumDefinition().members())
 					if (enumMember->name() == memberName)
 						output += ReferenceCollector::collect(enumMember.get(), sourceUnit, enumMember->name());
 
-				// find uses of the enum value
+				// TODO: find uses of the enum value
+				return output;
 			}
-			else
-				trace("semanticHighlight: not an EnumType");
 		}
 		else
 		{
@@ -565,27 +563,27 @@ vector<DocumentHighlight> LanguageServer::semanticHighlight(DocumentPosition _do
 	{
 		solAssert(!identifierPath->path().empty(), "");
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		output += ReferenceCollector::collect(identifierPath->annotation().referencedDeclaration, sourceUnit, identifierPath->path().back());
+		return ReferenceCollector::collect(identifierPath->annotation().referencedDeclaration, sourceUnit, identifierPath->path().back());
 	}
 	else if (auto const* functionDefinition = dynamic_cast<FunctionDefinition const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		output += ReferenceCollector::collect(functionDefinition, sourceUnit, functionDefinition->name());
+		return ReferenceCollector::collect(functionDefinition, sourceUnit, functionDefinition->name());
 	}
 	else if (auto const* enumDef = dynamic_cast<EnumDefinition const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		output += ReferenceCollector::collect(enumDef, sourceUnit, enumDef->name());
+		return ReferenceCollector::collect(enumDef, sourceUnit, enumDef->name());
 	}
 	else if (auto const* importDef = dynamic_cast<ImportDirective const*>(sourceNode))
 	{
 		frontend::SourceUnit const& sourceUnit = m_compilerStack->ast(sourceName);
-		output += ReferenceCollector::collect(importDef, sourceUnit, importDef->name());
+		return ReferenceCollector::collect(importDef, sourceUnit, importDef->name());
 	}
 	else
 		trace("semanticHighlight: not an identifier. "s + typeid(*sourceNode).name());
 
-	return output;
+	return {};
 }
 
 // {{{ LSP internals
@@ -836,8 +834,7 @@ void LanguageServer::handle_textDocument_definition(MessageId _id, Json::Value c
 
 void LanguageServer::handle_textDocument_highlight(MessageId _id, Json::Value const& _args)
 {
-	DocumentPosition dpos{};
-	loadTextDocumentPosition(dpos, _args);
+	auto const dpos = extractDocumentPosition(_args);
 
 	Json::Value jsonReply = Json::arrayValue;
 	for (DocumentHighlight const& highlight: semanticHighlight(dpos))
@@ -854,8 +851,7 @@ void LanguageServer::handle_textDocument_highlight(MessageId _id, Json::Value co
 
 void LanguageServer::handle_textDocument_references(MessageId _id, Json::Value const& _args)
 {
-	DocumentPosition dpos{};
-	loadTextDocumentPosition(dpos, _args);
+	auto const dpos = extractDocumentPosition(_args);
 
 	trace(
 		"find all references: " +
