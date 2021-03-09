@@ -19,21 +19,109 @@ SMTChecker module automatically tries to prove that the code satisfies the
 specification given by ``require/assert`` statements. That is, it considers
 ``require`` statements as assumptions and tries to prove that the conditions
 inside ``assert`` statements are always true.  If an assertion failure is
-found, a counterexample is given to the user, showing how the assertion can be
-violated.
+found, a counterexample may be given to the user, showing how the assertion can
+be violated. If no warning is given by the SMTChecker for a property,
+it means that the property is safe.
 
 The other verification targets that the SMTChecker checks at compile time are:
 
-- Arithmetic underflow and overflow (`underflow` and `overflow`).
-- Division by zero (`divByZero`).
-- Trivial conditions and unreachable code (`constantCondition`).
-- Popping an empty array (`popEmptyArray`).
-- Insufficient funds for a transfer (`balance`).
+- Arithmetic underflow and overflow.
+- Division by zero.
+- Trivial conditions and unreachable code.
+- Popping an empty array.
+- Insufficient funds for a transfer.
 
-The names after each target above can be used when specifying subsets of targets.
+The potential warnings that the SMTChecker reports are:
 
+- ``<failing  property> happens here.``. This means that the SMTChecker proved that a certain property fails. A counterexample may be given, however in complex situations it may also not show a counterexample. This result may also be a false positive in certain cases, when the SMT encoding adds abstractions for Solidity code that is either hard or impossible to express.
+- ``<failing property> might happen here``. This means that the solver could not prove either case in the given timeout. Since the result is unknown, the SMTChecker reports the potential failure for soundness. This may be solved by increasing the query timeout, but the problem might also simply be too hard.
+
+.. note::
+  The lack of warnings for a verification target represents an undisputed
+  mathematical proof of correctness. Keep in mind that these problems are
+  *very hard* and sometimes *impossible* to solve automatically in the
+  general case.  Therefore, several properties might not be solved or might
+  lead to false positives for large contracts. Every proven property should
+  be seen as an important achievement. For advanced users, see `ref: ...`
+  to learn a few SMTChecker options that might help proving more complex
+  properties.
+  
 It is currently an experimental feature, therefore in order to use it you need
 to enable it via :ref:`a pragma directive<smt_checker>`.
+
+***************
+Simple Tutorial
+***************
+
+.. code-block:: Solidity
+
+    pragma experimental SMTChecker;
+
+    contract Overflow {
+        uint immutable x;
+        uint immutable y;
+
+        function add(uint _x, uint _y) internal pure returns (uint) {
+            return _x + _y;
+        }
+
+        constructor(uint _x, uint _y) {
+            (x, y) = (_x, _y);
+        }
+
+        function stateAdd() public view returns (uint) {
+            return add(x, y);
+        }
+    }
+
+The contract above shows an overflow check example.
+The SMTChecker will, by default, check every reachable arithmetic operation
+in the contract for potential underflow and overflow.
+Here, it reports the following:
+
+.. code-block:: bash
+
+    Warning: CHC: Overflow (resulting value larger than 2**256 - 1) happens here.
+    Counterexample:
+    x = 1, y = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+     = 0
+    
+    Transaction trace:
+    Overflow.constructor(1, 115792089237316195423570985008687907853269984665640564039457584007913129639935)
+    State: x = 1, y = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+    Overflow.stateAdd()
+        Overflow.add(1, 115792089237316195423570985008687907853269984665640564039457584007913129639935) -- internal call
+     --> o.sol:9:20:
+      |
+    9 |             return _x + _y;
+      |                    ^^^^^^^
+
+If we add ``require`` statements that filter out overflow cases,
+the SMTChecker proves that no overflow is reachable:
+
+.. code-block:: Solidity
+
+    pragma experimental SMTChecker;
+
+    contract Overflow {
+        uint immutable x;
+        uint immutable y;
+
+        function add(uint _x, uint _y) internal pure returns (uint) {
+            return _x + _y;
+        }
+
+        constructor(uint _x, uint _y) {
+            (x, y) = (_x, _y);
+        }
+
+        function stateAdd() public view returns (uint) {
+            require(x < type(uint128).max);
+            require(y < type(uint128).max);
+            return add(x, y);
+        }
+    }
+
 
 ********************
 SMTChecker Internals
