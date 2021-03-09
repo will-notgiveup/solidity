@@ -421,6 +421,30 @@ If the SMTChecker does not manage to solve the contract properties with the defa
 a timeout can be given in milliseconds via the CLI option ``--model-checker-timeout <time>`` or
 the JSON option ``settings.modelChecker.timeout=<time>``, where 0 means no timeout.
 
+Verification Targets
+====================
+
+The types of verification targets created by the SMTChecker can also be customized via
+the CLI option ``--model-checker-target <targets>`` or the JSON option
+``settings.modelChecker.targets=<targets>``, where ``<targets>`` is a no-space-comma-separated
+list of one or more verification targets. The keywords that represent the targets are:
+
+- Assertions: ``assert``.
+- Arithmetic underflow: ``underflow``.
+- Arithmetic overflow: ``overflow``.
+- Division by zero: ``divByZero``.
+- Trivial conditions and unreachable code: ``constantCondition``.
+- Popping an empty array: ``popEmptyArray``.
+- Insufficient funds for a transfer: ``balance``.
+- All of the above: ``all``.
+- None of the above: ``none``.
+
+A common subset of targets might be, for example:
+``-model-checker-targets assert,overflow``.
+
+There is no precise heuristic on how and when to split verification targets,
+but it can be useful especially when dealing with large contracts.
+
 Model Checking Engines
 ======================
 
