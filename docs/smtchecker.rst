@@ -36,6 +36,9 @@ The potential warnings that the SMTChecker reports are:
 - ``<failing  property> happens here.``. This means that the SMTChecker proved that a certain property fails. A counterexample may be given, however in complex situations it may also not show a counterexample. This result may also be a false positive in certain cases, when the SMT encoding adds abstractions for Solidity code that is either hard or impossible to express.
 - ``<failing property> might happen here``. This means that the solver could not prove either case in the given timeout. Since the result is unknown, the SMTChecker reports the potential failure for soundness. This may be solved by increasing the query timeout, but the problem might also simply be too hard.
 
+It is currently an experimental feature, therefore in order to use it you need
+to enable it via :ref:`a pragma directive<smt_checker>`.
+
 .. note::
   The lack of warnings for a verification target represents an undisputed
   mathematical proof of correctness. Keep in mind that these problems are
@@ -46,9 +49,6 @@ The potential warnings that the SMTChecker reports are:
   to learn a few SMTChecker options that might help proving more complex
   properties.
   
-It is currently an experimental feature, therefore in order to use it you need
-to enable it via :ref:`a pragma directive<smt_checker>`.
-
 ********
 Tutorial
 ********
@@ -227,7 +227,6 @@ gives us:
     --> max.sol:14:4:
      |
   14 | 			assert(m > _a[i]);
-
 
 
 State Properties
