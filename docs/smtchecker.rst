@@ -328,6 +328,82 @@ the SMTChecker gives us exactly *how* to reach (2, 4):
      | 			^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
+External Calls and Reentrancy
+=============================
+
+Every external call is treated as a call to unknown code by the SMTChecker.
+The reasoning behind that is, that even if the code of the called contract is
+available at compile time, there is no guarantee that the deployed contract
+will indeed be the same as the contract where the interface came from at
+compile time.
+
+In some cases, it is possible to automatically infer properties over state
+variables that are still true even if the externally called code can do
+anything, including reenter the caller contract.
+
+.. code-block:: Solidity
+
+  pragma experimental SMTChecker;
+  
+  interface Unknown {
+  	function run() external;
+  }
+  
+  contract Mutex {
+  	uint x;
+  	bool lock;
+  
+  	Unknown immutable unknown;
+  
+  	constructor(Unknown _u) {
+  		require(address(_u) != address(0));
+  		unknown = _u;
+  	}
+  
+  	modifier mutex {
+  		require(!lock);
+  		lock = true;
+  		_;
+  		lock = false;
+  	}
+  
+  	function set(uint _x) mutex public {
+  		x = _x;
+  	}
+  
+  	function run() mutex public {
+  		uint xPre = x;
+  		unknown.run();
+  		assert(xPre == x);
+  	}
+  }
+
+The example above shows a contract that uses a mutex flag to forbid reentrancy.
+The solver is able to infer that when ``unknown.run()`` is called, the contract
+is already "locked", so it would not be possible to change the value of ``x``,
+regardless what the unknown called code does.
+
+If we "forget" to use the ``mutex`` modifier on function ``set``, the
+SMTChecker is able to synthesize the behavior of the externally called code so
+that the assertion fails:
+
+.. code-block:: bash
+
+  Warning: CHC: Assertion violation happens here.
+  Counterexample:
+  x = 1, lock = true, unknown = 1
+  
+  Transaction trace:
+  Mutex.constructor(1)
+  State: x = 0, lock = false, unknown = 1
+  Mutex.run()
+      unknown.run() -- untrusted external call, synthesized as:
+          Mutex.set(1) -- reentrant call
+    --> m.sol:32:3:
+     |
+  32 | 		assert(xPre == x);
+     | 		^^^^^^^^^^^^^^^^^
+
 
 ********************
 SMTChecker Internals
