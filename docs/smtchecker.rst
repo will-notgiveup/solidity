@@ -49,9 +49,12 @@ The potential warnings that the SMTChecker reports are:
 It is currently an experimental feature, therefore in order to use it you need
 to enable it via :ref:`a pragma directive<smt_checker>`.
 
-***************
-Simple Tutorial
-***************
+********
+Tutorial
+********
+
+Overflow
+========
 
 .. code-block:: Solidity
 
@@ -121,6 +124,110 @@ the SMTChecker proves that no overflow is reachable:
             return add(x, y);
         }
     }
+
+
+Assert
+======
+
+An assertion represents an invariant in your code: a property that must be true
+*for all cases*, otherwise there is a bug.
+
+The code below defines a function ``f`` that guarantees no overflow.
+Function ``inv`` defines the specification that ``f`` is monotonically increasing:
+for every possible pair ``(_a, _b)``, if ``_b > _a`` then ``f(_b) > f(_a)``.
+Since ``f`` is indeed monotonically increasing, the SMTChecker proves that our
+property is correct. You are encouraged to play with the property and the function
+definition to see what results come out!
+
+.. code-block:: Solidity
+
+    pragma experimental SMTChecker;
+
+    contract Monotonic {
+        function f(uint _x) internal pure returns (uint) {
+            require(_x < type(uint128).max);
+            return _x * 42;
+        }
+
+        function inv(uint _a, uint _b) public pure {
+            require(_b > _a);
+            assert(f(_b) > f(_a));
+        }
+    }
+
+We can also add assertions inside loops to verify more complicated properties.
+The following code searches for the maximum element of an unrestricted array of
+numbers, and asserts the property that the found element must be greater or
+equal every element in the array.
+
+.. code-block:: Solidity
+
+  pragma experimental SMTChecker;
+
+  contract Max {
+      function max(uint[] memory _a) public pure returns (uint) {
+          uint m = 0;
+          for (uint i = 0; i < _a.length; ++i)
+              if (_a[i] > m)
+                  m = _a[i];
+
+          for (uint i = 0; i < _a.length; ++i)
+              assert(m >= _a[i]);
+
+          return m;
+      }
+  }
+
+Note that in this example the SMTChecker will automatically try to prove three properties:
+
+1. ``++i`` at line 6 does not overflow.
+2. ``++i`` at line 10 does not overflow.
+3. Assertion at line 11 is always true.
+
+.. note::
+  The properties involve loops, which makes it *much much* harder than the previous
+  examples, so beware of loops!
+
+All the properties are correctly proven safe. Feel free to change the
+properties and/or add restrictions on the array to see different results.
+For example, changing the code to
+
+.. code-block:: Solidity
+
+  pragma experimental SMTChecker;
+
+  contract Max {
+      function max(uint[] memory _a) public pure returns (uint) {
+          require(_a.length >= 5);
+          uint m = 0;
+          for (uint i = 0; i < _a.length; ++i)
+              if (_a[i] > m)
+                  m = _a[i];
+
+          for (uint i = 0; i < _a.length; ++i)
+              assert(m > _a[i]);
+
+          return m;
+      }
+  }
+
+gives us:
+
+.. code-block:: bash
+
+  Warning: CHC: Assertion violation happens here.
+  Counterexample:
+  
+  _a = [0, 0, 0, 0, 0]
+   = 0
+  
+  Transaction trace:
+  Test.constructor()
+  Test.max([0, 0, 0, 0, 0])
+    --> max.sol:14:4:
+     |
+  14 | 			assert(m > _a[i]);
+
 
 
 ********************
