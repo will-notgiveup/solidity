@@ -514,6 +514,35 @@ options in the previous section.
 If you are sure of a false positive, adding ``require`` statements in the code
 with more information may also give some more power to the solver.
 
+SMT Encoding and Types
+----------------------
+
+The SMTChecker encoding tries to be as precise as possible, mapping Solidity types
+and expressions to their closest `SMT-LIB <http://smtlib.cs.uiowa.edu/>`_
+representation, as shown in the table below.
+
++-----------------------+--------------------------------+-----------------------------+
+|Solidity type          |SMT sort                        |Theories                     |
++=======================+================================+=============================+
+|Boolean                |Bool                            |Bool                         |
++-----------------------+--------------------------------+-----------------------------+
+|intN, uintN, address,  |Integer                         |LIA, NIA                     |
+|bytesN, enum, contract |                                |                             |
++-----------------------+--------------------------------+-----------------------------+
+|array, mapping, bytes, |Tuple                           |Datatypes, Arrays, LIA       |
+|string                 |(Array elements, Integer length)|                             |
++-----------------------+--------------------------------+-----------------------------+
+|struct                 |Tuple                           |Datatypes                    |
++-----------------------+--------------------------------+-----------------------------+
+|other types            |Integer                         |LIA                          |
++-----------------------+--------------------------------+-----------------------------+
+
+Types that are not yet supported are abstracted by a single 256-bit unsigned
+integer, where their unsupported operations are ignored.
+
+For more details on how the SMT encoding works internally, see the paper
+`SMT-based Verification of Solidity Smart Contracts <https://github.com/leonardoalt/text/blob/master/solidity_isola_2018/main.pdf>`_.
+
 Function Calls
 --------------
 
@@ -695,35 +724,3 @@ push: If the ``push`` operation is applied to an array of length 2^256 - 1, its
 length silently overflows.
 However, this is unlikely to happen in practice, since the operations required
 to grow the array to that point would take billions of years to execute.
-
-
-SMT Encoding
-============
-
-The SMT encoding tries to be as precise as possible, mapping Solidity types
-and expressions to their closest `SMT-LIB <http://smtlib.cs.uiowa.edu/>`_
-representation, as shown in the table below.
-
-+-----------------------+--------------------------------+-----------------------------+
-|Solidity type          |SMT sort                        |Theories (quantifier-free)   |
-+=======================+================================+=============================+
-|Boolean                |Bool                            |Bool                         |
-+-----------------------+--------------------------------+-----------------------------+
-|intN, uintN, address,  |Integer                         |LIA, NIA                     |
-|bytesN, enum           |                                |                             |
-+-----------------------+--------------------------------+-----------------------------+
-|array, mapping, bytes, |Tuple                           |Datatypes, Arrays, LIA       |
-|string                 |(Array elements, Integer length)|                             |
-+-----------------------+--------------------------------+-----------------------------+
-|struct                 |Tuple                           |Datatypes                    |
-+-----------------------+--------------------------------+-----------------------------+
-|other types            |Integer                         |LIA                          |
-+-----------------------+--------------------------------+-----------------------------+
-
-Types that are not yet supported are abstracted by a single 256-bit unsigned
-integer, where their unsupported operations are ignored.
-
-For more details on how the SMT encoding works internally, see the paper
-`SMT-based Verification of Solidity Smart Contracts <https://github.com/leonardoalt/text/blob/master/solidity_isola_2018/main.pdf>`_.
-
-
